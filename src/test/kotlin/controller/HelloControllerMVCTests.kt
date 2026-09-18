@@ -1,6 +1,7 @@
 package es.unizar.webeng.hello.controller
 
 import es.unizar.webeng.hello.config.WebConfig
+import jakarta.servlet.http.Cookie
 import org.hamcrest.CoreMatchers.*
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
@@ -90,5 +91,32 @@ class HelloControllerMVCTests {
             .andDo(print())
             .andExpect(status().isBadRequest)
             .andExpect(jsonPath("$.error", equalTo("Name must be at most 50 characters.")))
+    }
+
+    @Test
+    fun `should set a cookie with the name when a valid name is provided`() {
+        mockMvc.perform(get("/").param("name", "Ana").locale(Locale.ENGLISH))
+            .andDo(print())
+            .andExpect(status().isOk)
+            .andExpect(cookie().value("name", "Ana"))
+            .andExpect(cookie().maxAge("name", 30 * 24 * 60 * 60))
+    }
+
+    @Test
+    fun `should greet using the remembered name when none is provided in the URL`() {
+        mockMvc.perform(get("/").cookie(Cookie("name", "Ana")).locale(Locale.ENGLISH))
+            .andDo(print())
+            .andExpect(status().isOk)
+            .andExpect(model().attribute("message", equalTo("Hello, Ana!")))
+            .andExpect(model().attribute("name", equalTo("Ana")))
+    }
+
+    @Test
+    fun `should not use the remembered name when name is explicitly empty`() {
+        mockMvc.perform(get("/").param("name", "").cookie(Cookie("name", "Ana")).locale(Locale.ENGLISH))
+            .andDo(print())
+            .andExpect(status().isOk)
+            .andExpect(model().attribute("message", equalTo(message)))
+            .andExpect(model().attribute("name", equalTo("")))
     }
 }

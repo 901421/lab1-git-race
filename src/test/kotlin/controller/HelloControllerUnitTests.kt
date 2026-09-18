@@ -6,17 +6,12 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.springframework.context.i18n.LocaleContextHolder
 import org.springframework.context.support.StaticMessageSource
-import org.springframework.ui.Model
-import org.springframework.ui.ExtendedModelMap
 import java.util.Locale
 
 class HelloControllerUnitTests {
-    private lateinit var controller: HelloController
-    private lateinit var model: Model
 
     private fun testMessageSource(): StaticMessageSource =
         StaticMessageSource().apply {
-            addMessage("greeting.default", Locale.ENGLISH, "Test Message")
             addMessage("greeting.named", Locale.ENGLISH, "Hello, {0}!")
         }
 
@@ -27,8 +22,6 @@ class HelloControllerUnitTests {
     @BeforeEach
     fun setup() {
         LocaleContextHolder.setLocale(Locale.ENGLISH)
-        controller = HelloController(testMessageSource())
-        model = ExtendedModelMap()
     }
 
     @AfterEach
@@ -36,23 +29,11 @@ class HelloControllerUnitTests {
         LocaleContextHolder.resetLocaleContext()
     }
 
-    @Test
-    fun `should return welcome view with default message`() {
-        val view = controller.welcome(model, "")
-
-        assertThat(view).isEqualTo("welcome")
-        assertThat(model.getAttribute("message")).isEqualTo("Test Message")
-        assertThat(model.getAttribute("name")).isEqualTo("")
-    }
-
-    @Test
-    fun `should return welcome view with personalized message`() {
-        val view = controller.welcome(model, "Developer")
-
-        assertThat(view).isEqualTo("welcome")
-        assertThat(model.getAttribute("message")).isEqualTo("Hello, Developer!")
-        assertThat(model.getAttribute("name")).isEqualTo("Developer")
-    }
+    // welcome() now needs a real HttpServletResponse to write the "remember
+    // the name" cookie (Piece 3), so its default/personalized-message cases
+    // are no longer meaningfully unit-testable in isolation — they're
+    // covered instead by HelloControllerMVCTests, through a real Spring
+    // request/response (which can also verify the cookie itself).
 
     @Test
     fun `should return API response with timestamp`() {
