@@ -8,6 +8,9 @@ import org.springframework.boot.test.context.SpringBootTest.WebEnvironment
 import org.springframework.boot.resttestclient.TestRestTemplate
 import org.springframework.boot.resttestclient.autoconfigure.AutoConfigureTestRestTemplate
 import org.springframework.boot.test.web.server.LocalServerPort
+import org.springframework.http.HttpEntity
+import org.springframework.http.HttpHeaders
+import org.springframework.http.HttpMethod
 import org.springframework.http.HttpStatus
 import org.springframework.http.MediaType
 
@@ -31,18 +34,47 @@ class IntegrationTest {
         assertThat(response.body).contains("Client-Side Educational Tool")
     }
 
+    // Accept-Language is set explicitly here: without it, the locale falls
+    // back to the server's own default (see WebConfig), which would make
+    // this test's outcome depend on the machine running it.
+    private fun withLanguage(tag: String): HttpEntity<Void> =
+        HttpEntity(null, HttpHeaders().apply { set("Accept-Language", tag) })
+
     @Test
     fun `should return personalized greeting when name is provided`() {
-        val response = restTemplate.getForEntity("http://localhost:$port?name=Developer", String::class.java)
-        
+        val response = restTemplate.exchange(
+            "http://localhost:$port?name=Developer",
+            HttpMethod.GET,
+            withLanguage("en"),
+            String::class.java
+        )
+
         assertThat(response.statusCode).isEqualTo(HttpStatus.OK)
         assertThat(response.body).contains("Hello, Developer!")
     }
 
     @Test
+    fun `should return personalized greeting in Spanish when Accept-Language is es`() {
+        val response = restTemplate.exchange(
+            "http://localhost:$port?name=Ana",
+            HttpMethod.GET,
+            withLanguage("es"),
+            String::class.java
+        )
+
+        assertThat(response.statusCode).isEqualTo(HttpStatus.OK)
+        assertThat(response.body).contains("¡Hola, Ana!")
+    }
+
+    @Test
     fun `should return API response with timestamp`() {
-        val response = restTemplate.getForEntity("http://localhost:$port/api/hello?name=Test", String::class.java)
-        
+        val response = restTemplate.exchange(
+            "http://localhost:$port/api/hello?name=Test",
+            HttpMethod.GET,
+            withLanguage("en"),
+            String::class.java
+        )
+
         assertThat(response.statusCode).isEqualTo(HttpStatus.OK)
         assertThat(response.headers.contentType).isEqualTo(MediaType.APPLICATION_JSON)
         assertThat(response.body).contains("Hello, Test!")
