@@ -17,6 +17,10 @@ import org.springframework.web.bind.annotation.RestController
 import java.time.Duration
 import java.time.Instant
 
+/**
+ * Serves the welcome page with a locale-aware, optionally personalized
+ * greeting for the "hello-app" increment.
+ */
 @Controller
 @Validated
 class HelloController(
@@ -28,6 +32,20 @@ class HelloController(
         private val NAME_COOKIE_MAX_AGE: Duration = Duration.ofDays(30)
     }
 
+    /**
+     * Renders the welcome page with a personalized, locale-aware greeting.
+     *
+     * Resolution order for the visitor's name: the [name] query parameter if
+     * present (even if blank, which forces the generic greeting for this
+     * request only); otherwise the value remembered in the `name` cookie, if
+     * any. A valid, non-blank [name] is (re)stored in that cookie for 30 days.
+     *
+     * @param model Spring MVC model, populated with `message` and `name`.
+     * @param response used to set the `name` cookie when applicable.
+     * @param name name from the query string, at most [MAX_NAME_LENGTH] characters.
+     * @param rememberedName name remembered from a previous visit, via cookie.
+     * @return the `welcome` view name.
+     */
     @GetMapping("/")
     fun welcome(
         model: Model,
@@ -52,6 +70,7 @@ class HelloController(
         return "welcome"
     }
 
+    /** Resolves the greeting text for [name] in the current request's locale. */
     private fun greetingFor(name: String): String {
         val locale = LocaleContextHolder.getLocale()
         return if (name.isNotBlank()) {
@@ -62,12 +81,22 @@ class HelloController(
     }
 }
 
+/** JSON counterpart of the welcome page, at `/api/hello`. */
 @RestController
 @Validated
 class HelloApiController(
     private val messageSource: MessageSource
 ) {
 
+    /**
+     * Returns a locale-aware JSON greeting.
+     *
+     * Unlike [HelloController.welcome], this endpoint does not remember the
+     * name across requests — every call must be explicit.
+     *
+     * @param name name to greet, at most [HelloController.MAX_NAME_LENGTH] characters.
+     * @return a map with `message` and `timestamp`.
+     */
     @GetMapping("/api/hello", produces = [MediaType.APPLICATION_JSON_VALUE])
     fun helloApi(
         @RequestParam(defaultValue = "World") @Size(max = HelloController.MAX_NAME_LENGTH) name: String

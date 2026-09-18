@@ -35,6 +35,18 @@ src/test/kotlin/controller/HelloControllerMVCTests.kt
 src/test/kotlin/IntegrationTest.kt
 ```
 
+## My increment
+
+Locale-aware greeting (English/Spanish, from `Accept-Language` or `?lang=`),
+Bean Validation on `name` (max 50 characters, with a friendly error), and
+the last valid `name` remembered across visits via a cookie. Full details,
+technical decisions, and AI disclosure in [`REPORT.md`](REPORT.md).
+
+```bash
+curl -H "Accept-Language: es" "http://localhost:8080/?name=Ana"
+curl "http://localhost:8080/?name=$(python3 -c 'print("a"*51)')"   # 400, name too long
+```
+
 ## License
 
 MIT — see `LICENSE`.
