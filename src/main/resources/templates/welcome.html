@@ -33,6 +33,9 @@
                         <img class="d-block mx-auto mb-4 main-logo" src="/assets/logo.svg" alt="Universidad Zaragoza Logo">
                         <h1 class="display-4 fw-bold text-primary mb-4">Welcome to Modern Web App</h1>
                         <p class="lead mb-4" th:text="${message}">Hello student.</p>
+                        <div class="alert alert-danger" th:if="${error}" th:text="${error}">
+                            Name is invalid.
+                        </div>
                         
                         <!-- HTTP Debug Section -->
                         <div class="row mt-4">

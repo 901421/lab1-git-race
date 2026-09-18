@@ -72,4 +72,23 @@ class HelloControllerMVCTests {
             .andExpect(jsonPath("$.message", equalTo("Hello, Test!")))
             .andExpect(jsonPath("$.timestamp").exists())
     }
+
+    @Test
+    fun `should return 400 with friendly error when name exceeds max length on the page`() {
+        val tooLong = "a".repeat(51)
+        mockMvc.perform(get("/").param("name", tooLong).locale(Locale.ENGLISH))
+            .andDo(print())
+            .andExpect(status().isBadRequest)
+            .andExpect(view().name("welcome"))
+            .andExpect(model().attribute("error", "Name must be at most 50 characters."))
+    }
+
+    @Test
+    fun `should return 400 JSON error when API name exceeds max length`() {
+        val tooLong = "a".repeat(51)
+        mockMvc.perform(get("/api/hello").param("name", tooLong).locale(Locale.ENGLISH))
+            .andDo(print())
+            .andExpect(status().isBadRequest)
+            .andExpect(jsonPath("$.error", equalTo("Name must be at most 50 characters.")))
+    }
 }
