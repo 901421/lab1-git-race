@@ -1,91 +1,201 @@
 # Lab 1 Git Race -- Project Report
 
-This note uses the same disclosure fields as the group-project **AI use (10%)** slice. Lab 1 is still **limited**: assistive GenAI only — not a full or substantial generated solution. The project will later expect agents plus `AGENTS.md` and one skill; you do **not** need those here.
-
-Do not invent a percentage of “AI vs original” lines. Empty or fake disclosure fails this lab.
-
 ## What I specified
 
-### Piece 1 — Locale-aware greeting
+I split the increment into three pieces and wrote down the goal and the success criteria of each one before writing any code.
 
-Goal decided before writing any code: make the greeting respond to the visitor's language (English and Spanish, at minimum), inferred from `Accept-Language`, with an explicit `?lang=` override, and persisted across visits (not just the current request). Success criteria: `/` returns the matching text for `en`/`es` headers; `?lang=es` switches the language and it stays switched on the next request without repeating the parameter; `/api/hello` behaves consistently with the page.
+### Piece 1: Locale-aware greeting
 
-### Piece 2 — Name validation
+Goal: the greeting follows the visitor's language (English and Spanish). The server reads it from the `Accept-Language` header, a `?lang=` parameter can override it, and the choice is remembered on the next visits.
 
-Goal decided before writing any code: the `name` parameter currently accepts any string, of any length, with no restriction — including the already-unused `spring-boot-starter-validation` dependency. The increment adds a length limit via Bean Validation, with a controlled response when violated: a friendly inline message on the page (`/`), and a clean JSON 400 on the API (`/api/hello`), instead of a generic failure or an uncontrolled stack trace.
+Success criteria:
+- `/` shows the English or the Spanish text for `Accept-Language: en` or `es`.
+- `?lang=es` switches the language, and the next request without the parameter stays in Spanish.
+- `/api/hello` uses the same language as the page.
 
-### Piece 3 — Remember the last valid name (optional)
+### Piece 2: Name validation
 
-Goal decided before writing any code: unlike the locale (Piece 1), the visitor's name was not remembered across visits — every request without an explicit `?name=` fell back to the generic greeting. This optional increment makes a valid, non-empty name persist across visits via a cookie, the same way the locale already does. Success criteria: a valid `?name=` sets a cookie; a later visit with no `name` param greets using that cookie and pre-fills the existing name field; an explicit empty `?name=` still greets generically without touching the cookie; an invalid (too long) name still fails exactly as in Piece 2.
+Goal: the `name` parameter accepted any string of any length. The project already had `spring-boot-starter-validation` but did not use it. I wanted a length limit with Bean Validation and a controlled answer when the limit is broken: a friendly message on the page and a JSON error on the API, both with HTTP 400, never a stack trace.
+
+Success criteria:
+- A name of 50 characters is accepted; 51 characters returns 400 on `/` and on `/api/hello`.
+- The error text is shown in the visitor's language.
+
+### Piece 3: Remember the last valid name
+
+Goal: the locale was remembered between visits, but the name was not. A valid name should be stored in a cookie and used when the visitor comes back.
+
+Success criteria:
+- A valid `?name=` sets a `name` cookie.
+- A later visit without `name` greets with the stored name and fills the name field.
+- An explicit empty `?name=` shows the generic greeting and does not change the cookie.
+- A name that is too long still fails as in Piece 2.
+
+### Review fixes (after the three pieces)
+
+After the three pieces were finished, I reviewed the whole increment against the lab guide. I tested it with plain `curl` and with unusual input, and some cases failed. These criteria were not in my first plan; I set them for the fixes:
+- The app gives the same answer on any machine. The server's own locale must not decide the language.
+- Normal input never causes an HTTP 500. This includes names with spaces or accents (for example "José María") and a malformed `?lang=`.
+- Every behaviour I added has at least one test.
 
 ## What I changed
 
-### Piece 1 — Locale-aware greeting
+### Behaviour, in short
 
-- New `src/main/kotlin/config/WebConfig.kt`: registers a `CookieLocaleResolver` (cookie `lang`, 30-day max age) and a `LocaleChangeInterceptor` bound to the `lang` query parameter.
-- New `src/main/resources/messages.properties` / `messages_es.properties`: externalized greeting text, replacing the hardcoded `app.message` string.
-- Modified `src/main/kotlin/controller/HelloController.kt`: `HelloController` and `HelloApiController` resolve the greeting through `MessageSource` + `LocaleContextHolder` instead of a fixed `@Value` string.
-- Modified `src/main/resources/application.properties`: removed the now-unused `app.message`, added `spring.messages.fallback-to-system-locale=false`.
-- Removed `src/main/resources/META-INF/additional-spring-configuration-metadata.json`: only documented `app.message`, which no longer exists.
-- Modified `IntegrationTest.kt`, `HelloControllerMVCTests.kt`, `HelloControllerUnitTests.kt`: explicit locale in requests/assertions, plus new cases for the Spanish path and the `?lang=` override.
+| Request | Before | After |
+|---|---|---|
+| `GET /` | English text | English or Spanish. Order: `?lang=`, then the `lang` cookie, then `Accept-Language`, then English |
+| `GET /api/hello?name=Ana` | `Hello, Ana!` | `Hello, Ana!` or `¡Hola, Ana!`, same rules as the page |
+| `GET /api/hello` (no name) | `Hello, World!` | `Hello, World!` or `¡Hola, Mundo!` |
+| `name` longer than 50 characters | accepted | HTTP 400: JSON `{"error": ...}` on the API, red alert on the page |
+| `GET /?name=Ana`, later `GET /` | generic greeting | `Hello, Ana!` (name remembered in a cookie, page only) |
 
-### Piece 2 — Name validation
+### Piece 1: Locale-aware greeting
 
-- Modified `HelloController.kt`: `@Validated` on both controller classes, `@Size(max = MAX_NAME_LENGTH)` on the `name` parameter of both endpoints, `MAX_NAME_LENGTH = 50` as a shared constant.
-- New `ValidationExceptionHandler.kt`: `@ControllerAdvice` catching `ConstraintViolationException`, returning a `ModelAndView` (page) or a JSON `ResponseEntity` (API) with status 400, chosen by inspecting the request path.
-- Modified `messages.properties` / `messages_es.properties`: new `name.tooLong` key.
-- Modified `welcome.html`: conditional Bootstrap alert (`th:if="${error}"`) showing the error when present.
-- Modified `HelloControllerMVCTests.kt`: two new test cases (page and API) for a name over the limit.
+- New `config/WebConfig.kt`: a `CookieLocaleResolver` (cookie `lang`, 30 days) and a `LocaleChangeInterceptor` for the `lang` query parameter.
+- New `messages.properties` and `messages_es.properties` with the greeting texts. They replace the fixed `app.message` property.
+- `controller/HelloController.kt`: both controllers get the text from `MessageSource` with the current locale.
+- `application.properties`: removed `app.message`; added `spring.messages.fallback-to-system-locale=false`.
+- Removed `META-INF/additional-spring-configuration-metadata.json`. It only described `app.message`.
+- Tests: the three test classes set the locale of each request. New cases for Spanish and for `?lang=`.
 
-### Piece 3 — Remember the last valid name (optional)
+### Piece 2: Name validation
 
-- Modified `HelloController.kt`: `welcome()` now reads `@CookieValue(name = "name", required = false)` and writes the cookie via `ResponseCookie` (30-day max age, mirroring the locale cookie) when a valid non-blank `name` is provided. No changes to `HelloApiController` — scoped to the page only.
-- Modified `HelloControllerMVCTests.kt`: three new cases (cookie is set, cookie is used when `name` is absent, explicit empty `name` does not use the cookie).
-- Modified `HelloControllerUnitTests.kt`: removed two tests that called `welcome()` directly with its old signature (no longer compiles now that it needs a real `HttpServletResponse`); their coverage was already duplicated, and better exercised, by the MVC-slice tests.
+- `HelloController.kt`: `@Validated` on both controllers and `@Size(max = MAX_NAME_LENGTH)` on `name`, with `MAX_NAME_LENGTH = 50`.
+- New `controller/ValidationExceptionHandler.kt`: a `@ControllerAdvice` that catches `ConstraintViolationException` and answers 400. It returns JSON for `/api/...` and the page with an error message for `/`.
+- New key `name.tooLong` in both message files.
+- `templates/welcome.html`: a Bootstrap alert shown only when there is an error.
+- `HelloControllerMVCTests.kt`: two cases for a name over the limit (page and API).
+
+### Piece 3: Remember the last valid name
+
+- `HelloController.kt`: `welcome()` reads the `name` cookie with `@CookieValue` and writes it with `ResponseCookie` (30 days) when the name is valid and not blank. `/api/hello` does not use this cookie.
+- `HelloControllerMVCTests.kt`: three cases (the cookie is set, the cookie is used, an empty `name` ignores the cookie).
+- `HelloControllerUnitTests.kt`: removed two tests that called `welcome()` directly. They stopped compiling when `welcome()` needed the HTTP response, and the MVC tests already covered the same cases.
+
+### Documentation
+
+- KDoc on `HelloController`, `HelloApiController` and `ValidationExceptionHandler` (`WebConfig` already had it).
+- `README.md`: a short section, `My increment`, with two example commands. The rest of the README is unchanged.
+
+### Review fixes (after the three pieces)
+
+- `WebConfig.kt`: without an `Accept-Language` header the locale is English, not the server's own locale (`setDefaultLocaleFunction`). A malformed `?lang=` is ignored (`isIgnoreInvalidLocale = true`).
+- `application.properties`: corrected the comment about `fallback-to-system-locale`. It promised more than the property does.
+- `HelloController.kt`: the default name of `/api/hello` comes from the new key `greeting.defaultName` ("World" / "Mundo"). The name is URL-encoded before it goes into the cookie.
+- Tests: one integration test without `Accept-Language`, and MVC tests for the default name in both languages, names with spaces and accents, a malformed `lang`, the `lang` cookie, and an unsupported language (`fr`). I also removed a test field that still read the old `app.message` property.
 
 ## Technical decisions
 
-### Piece 1 — Locale-aware greeting
+Each point says what I chose, what I rejected and why.
 
-- Spring's built-in i18n (`MessageSource` + `LocaleResolver`) over hand-parsing `Accept-Language`: keeps text out of the code, idiomatic.
-- `CookieLocaleResolver` over session-based: the requirement was persistence across visits, which a session does not give.
-- Localized both the page and `/api/hello`, for consistency, though only the page was strictly required.
-- No fixed default locale on the resolver, on purpose: without a cookie/`?lang=`, resolution still falls through to `Accept-Language`.
-- `spring.messages.fallback-to-system-locale=false`: an unmatched locale falls back to the base `messages.properties` (English), not the server machine's own OS locale.
+### Piece 1: Locale-aware greeting
 
-### Piece 2 — Name validation
+- **Spring i18n (`MessageSource` + `LocaleResolver`)** instead of reading `Accept-Language` by hand. The texts stay out of the code, and adding a language only needs a new `messages_xx.properties` file.
+- **`CookieLocaleResolver`** instead of `SessionLocaleResolver`. A session ends when the browser closes; the cookie keeps the language for 30 days, which was my success criterion.
+- **Localize `/api/hello` too.** Only the page needed it, but a page and an API that answer in different languages would be confusing.
+- **`fallback-to-system-locale=false`.** With the default value (`true`), a language without its own file fell back to the server's locale. On my Spanish machine, `?lang=en` returned Spanish, because there is no `messages_en.properties`. Now it falls back to `messages.properties`, which is English.
 
-- Constraint annotated directly on the `@RequestParam` (with `@Validated` on the class) instead of a dedicated DTO: the smallest change that genuinely uses Bean Validation, justified for a single validated field.
-- Error text is **not** produced by Bean Validation's own message interpolation, which by default resolves against the JVM's locale, not the request's — that would have reintroduced the exact locale bug fixed in Piece 1. Instead, the message is resolved explicitly through the same `MessageSource` + `LocaleContextHolder` path already used for greetings.
-- A single `@ExceptionHandler` picks the response shape by checking `request.requestURI` (`/api/` prefix): simplest option with only two fixed routes; content negotiation would be over-engineering here.
-- Rejected a full DTO + `@Valid @ModelAttribute` approach (considered in the design discussion): more boilerplate than justified for one field.
+### Piece 2: Name validation
 
-### Piece 3 — Remember the last valid name (optional)
+- **`@Size` on the `@RequestParam`, with `@Validated` on the class**, instead of a DTO with `@Valid` or a manual `if`. It is the smallest change that really uses Bean Validation, and there is only one field. `@Validated` is needed because Spring does not validate single method parameters without it.
+- **Error text from `MessageSource`, not from Bean Validation's own message.** Bean Validation uses the JVM's locale, not the request's, so the error would not follow the visitor's language.
+- **Page or JSON chosen by the `/api/` prefix of the path**, instead of content negotiation with the `Accept` header. There are only two fixed routes. The limit: it would stop working if the app ran under a context path.
+- **Limit of 50 characters** in one constant, used by the annotation and by the error message.
 
-- `@CookieValue` + `ResponseCookie` directly in the controller (no dedicated interceptor): the smallest option for a single, optional field; a `WebConfig`-style interceptor (mirroring the locale one) was considered but not justified for this scope.
-- An explicit empty `?name=` deliberately does **not** fall back to the cookie (only an *absent* parameter does) — same "explicit override wins" pattern already used for `?lang=` in Piece 1.
-- No template changes needed: the existing `webName` input already binds to `${name}`, so it gets pre-filled automatically once the controller resolves the remembered name.
-- Scoped to the page only, not `/api/hello`: an API call is normally explicit about `name`, so remembering it has no clear benefit there.
+### Piece 3: Remember the last valid name
+
+- **`@CookieValue` and `ResponseCookie` in the controller**, instead of an interceptor like the one for the locale. For one optional field, an interceptor was more code than needed.
+- **An empty `?name=` does not use the cookie; a missing one does.** It follows the same idea as `?lang=`: an explicit value in the request wins. In the code, `null` (missing) and `""` (empty) are different cases.
+- **Page only, not `/api/hello`.** An API call should give the same answer to the same request, so every call must send its own name.
+- **Removed two unit tests** instead of rewriting them with a mock response (`MockHttpServletResponse`). The MVC tests already covered them and also check the cookie. Rewriting them would have been cheap too; I chose not to keep two tests for the same thing.
+
+### Review fixes
+
+- **English when there is no `Accept-Language` header**, using `setDefaultLocaleFunction`. I rejected two options: a fixed `setDefaultLocale`, which ignores the header for everybody, and leaving it as it was, where plain `curl` got Spanish on my machine and English on others.
+- **URL-encode the name in the cookie with `UriUtils.encode`.** My first plan was `URLEncoder` plus `URLDecoder`. I dropped it when a test showed that `@CookieValue` already decodes `%XX`, so decoding again by hand would decode twice.
+- **Translate the default name ("World" / "Mundo").** Before, Spanish showed "¡Hola, World!". An empty `?name=` still gets the default name, as in the starter.
+- **Ignore a malformed `?lang=`** (`isIgnoreInvalidLocale`) instead of letting it fail with a 500.
 
 ## How I verified
 
-### Piece 1 — Locale-aware greeting
+### Final state
 
-- `./gradlew check` → BUILD SUCCESSFUL, all tests passing (2 new: Spanish greeting, `?lang=` override with cookie assertion).
-- Manual `curl` checks against the running app: `Accept-Language: en`/`es`, `?lang=es` override + resulting `Set-Cookie`, `/api/hello`.
-- Two real bugs found and fixed by running the code (not assumed): (1) a fixed default locale on the resolver made it ignore `Accept-Language` entirely; (2) Spring Boot's default `fallback-to-system-locale=true` let the **server's OS locale** win over the client's requested one.
-- Also found MockMvc's `.header("Accept-Language", …)` does not affect the resolved locale in `@WebMvcTest` — `.locale(Locale...)` on the request builder is required instead.
+```bash
+./gradlew clean check
+```
 
-### Piece 2 — Name validation
+BUILD SUCCESSFUL, 26 tests, 0 failures. My machine runs with a Spanish locale, so I also ran the tests with an English JVM, to be sure they do not depend on the machine:
 
-- `./gradlew clean check` → BUILD SUCCESSFUL, 17 tests, 0 failures (5 new since Piece 1: 2 locale + this piece's 2 validation cases, plus one pre-existing recount).
-- Manual `curl` checks against the running app: name of exactly 50 chars (accepted), 51 chars (rejected) on both the page and the API, in English and Spanish, confirming the correct status code, the alert on the page, and the JSON error body.
+```bash
+LANG=en_US.UTF-8 JAVA_TOOL_OPTIONS="-Duser.language=en -Duser.country=US" ./gradlew check --rerun-tasks
+```
 
-### Piece 3 — Remember the last valid name (optional)
+Same result: 26 tests, 0 failures.
 
-- `./gradlew clean check` → BUILD SUCCESSFUL, 18 tests, 0 failures.
-- Manual `curl` checks: `?name=Ana` sets `Set-Cookie: name=Ana`; a later request with `-b "name=Ana"` and no `name` param greets "Hello, Ana!" and pre-fills the input; `?name=` with the same cookie present still shows the generic greeting; `/api/hello` unaffected.
-- Real issue found while implementing (not assumed): changing `welcome()`'s signature broke `HelloControllerUnitTests` at compile time. Stopped, presented two options (mock `HttpServletResponse` vs. retire the now-redundant tests), and removed them after confirming they duplicated, without adding, coverage already present in the MVC-slice tests.
+### What failed first, and what I fixed
+
+**Piece 1.** I found two bugs by running the app:
+- A fixed default locale on the resolver (`setDefaultLocale`) made it ignore `Accept-Language`. I removed it. I checked this again later: with `setDefaultLocale(Locale.ENGLISH)` put back, `Accept-Language: es` returned "Hello, Ana!".
+- With Spring Boot's default `fallback-to-system-locale=true`, `?lang=en` returned Spanish on my machine. I set it to `false`. I checked this again later by starting the app with `--spring.messages.fallback-to-system-locale=true`: `?lang=en` and `Accept-Language: fr` both returned "¡Hola, Ana!".
+
+In MockMvc, `.header("Accept-Language", ...)` did not change the locale; I had to use `.locale(...)` on the request.
+
+**Piece 2.** `./gradlew clean check`: BUILD SUCCESSFUL, 17 tests at that point. I also checked with `curl` that 50 characters are accepted and 51 are rejected, on the page and on the API.
+
+**Piece 3.** The new signature of `welcome()` broke the compilation of `HelloControllerUnitTests`. I removed the two tests that called it (see *Technical decisions*). Then `./gradlew clean check` passed with 18 tests.
+
+**Review fixes.** For each fix I first wrote a test and saw it fail, then changed the code:
+
+| Commit | Test that failed first | Error before the fix |
+|---|---|---|
+| `8ad4a0a` | `/api/hello?name=Test` with no `Accept-Language` | `¡Hola, Test!` instead of `Hello, Test!` |
+| `f231564` | `/api/hello` with no name, in Spanish | `¡Hola, World!` instead of `¡Hola, Mundo!` |
+| `fccffb4` | `/?name=José María` | HTTP 500: `RFC2616 cookie value can only have US-ASCII chars` |
+| `6e2f253` | `/?lang=;;` | HTTP 500: `Locale part ";;" contains invalid characters` |
+
+After the cookie fix I also checked it with the real server. With `curl`, the names `José María`, `Ana;x`, `Ana,x`, `Ana"x` and `100%` were stored and read back correctly on the next request.
+
+### How to run and test
+
+```bash
+./gradlew bootRun
+```
+
+Then, from another terminal (timestamps shortened):
+
+```bash
+curl -s -H "Accept-Language: es" "http://localhost:8080/api/hello?name=Ana"
+# {"message":"¡Hola, Ana!","timestamp":"..."}
+
+curl -s "http://localhost:8080/api/hello"
+# {"message":"Hello, World!","timestamp":"..."}
+
+curl -s -H "Accept-Language: es" "http://localhost:8080/api/hello"
+# {"message":"¡Hola, Mundo!","timestamp":"..."}
+
+curl -s -w " HTTP %{http_code}\n" "http://localhost:8080/api/hello?name=$(python3 -c 'print("a"*51)')"
+# {"error":"Name must be at most 50 characters."} HTTP 400
+
+curl -s -i "http://localhost:8080/?lang=es" | grep -i "^set-cookie"
+# Set-Cookie: lang=es; Path=/; Max-Age=2592000; Expires=...; SameSite=Lax
+
+curl -s -i "http://localhost:8080/?name=Jos%C3%A9%20Mar%C3%ADa" | grep -i "^set-cookie"
+# Set-Cookie: name=Jos%C3%A9%20Mar%C3%ADa; Path=/; Max-Age=2592000; Expires=...
+
+curl -s -b "name=Ana" "http://localhost:8080/" | grep "lead"
+# <p class="lead mb-4">Hello, Ana!</p>
+```
+
+### Properties and cookies
+
+| Item | Where | Value |
+|---|---|---|
+| `spring.messages.fallback-to-system-locale` | `application.properties` | `false` |
+| `greeting.default`, `greeting.named`, `greeting.defaultName`, `name.tooLong` | `messages.properties`, `messages_es.properties` | English / Spanish texts |
+| Cookie `lang` | set by `?lang=` | 30 days, `Path=/` |
+| Cookie `name` | set by a valid `?name=` on `/` | 30 days, `Path=/`, URL-encoded |
+| Maximum name length | `HelloController.MAX_NAME_LENGTH` | 50 |
 
 ## AI disclosure
 
