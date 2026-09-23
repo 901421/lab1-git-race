@@ -199,28 +199,75 @@ curl -s -b "name=Ana" "http://localhost:8080/" | grep "lead"
 
 ## AI disclosure
 
-**Methodology:** every AI-assisted increment in this lab follows a fixed process agreed with the assistant before writing any code, kept in a local `CLAUDE.md` file (working rules only, not part of this submission): the assistant states the problem, proposes several general solutions with their trade-offs, I pick one, and each file is then proposed and only applied after my explicit confirmation. Progress and AI-usage notes are tracked between sessions in a local `STATUS.md` (not submitted either), which is what this disclosure is built from. `CLAUDE.md` itself was not written by me alone beforehand — it was drafted together with the assistant, in this same conversation, before any lab code existed.
+**Method.** I used Claude Code as an assistant in every step, under fixed rules that I wrote in a local `CLAUDE.md` file (not part of the submission). For each piece I first wrote the goal and the success criteria (see *What I specified*). The assistant then described the problem, proposed two or three solutions with their trade-offs, and after I chose one, proposed the code block by block. No block was written until I approved it. The assistant ran `./gradlew check` and the `curl` commands in the terminal of my machine, and I read their output before approving each step. Prompts were in Spanish; I quote them literally, with a translation.
 
-### Piece 1 — Locale-aware greeting
+Summary of the uses:
 
-- **Tools:** Claude Code (Sonnet 5).
-- **Purpose:** assisted implementing this increment through a guided flow: stating the problem, proposing several general solutions with trade-offs, then proposing each file's content one at a time for approval before writing.
-- **Representative prompts:** "propusieras el problema primero, propusieras posibles soluciones y elijo una... y me propones bloques de código a modificar para cada fichero"; per-file "sí" / "aplica este bloque" confirmations.
-- **Affected files/sections:** see "What I changed" above.
-- **Validation steps:** `./gradlew check` and manual `curl` checks, run and read by me.
-- **Human-reviewed:** I picked the cookie-based resolver over the two alternatives presented, decided to also localize `/api/hello`, and approved each file individually before it was written.
-- **Provenance note:** this exact increment had already been implemented and verified in an earlier session; a local git/repository incident (fork identity, unrelated to this code) required rebuilding the repository from scratch. The assistant kept a private reference of the previous diff to avoid re-deriving trivial syntax, but the problem, the alternatives and the decision were walked through again with me before any file was written, not reapplied blindly.
+| Phase | Tools / skills | Purpose |
+|---|---|---|
+| Piece 1: locale | Claude Code (Sonnet 5) | Alternatives for i18n and code proposed block by block |
+| Piece 2: validation | Claude Code (Sonnet 5) | Alternatives for validation and code proposed block by block |
+| Piece 3: name cookie | Claude Code (Sonnet 5) | Alternatives for the cookie; how to handle the broken unit tests |
+| Documentation | Claude Code (Sonnet 5) | KDoc drafts and the `README.md` note |
+| Review fixes | Claude Code (Opus 5.5), with a local lab-workflow skill (`/practica`) | Check the increment against the guide, test edge cases, find bugs, propose tests and fixes |
+| Report | Claude Code (Opus 5.5), with a local writing-style skill (`/memoria-sin-ia`) | Draft sections 1 to 4 of this report from the facts in the repository, in plain English |
 
-### Piece 2 — Name validation
+### Piece 1: Locale-aware greeting
 
-- **Representative prompts:** "elijo B, esa regla vale" (choosing the solution after trade-offs were presented); per-file "sí, aplícalo" confirmations.
-- **Affected files/sections:** see "What I changed" above.
-- **Validation steps:** `./gradlew clean check` and manual `curl` checks, run and read by me.
-- **Human-reviewed:** I picked option B over the DTO and manual alternatives, and approved the locale-handling decision for error messages (avoiding Bean Validation's own interpolator) before it was implemented.
+| Field | Entry |
+|---|---|
+| Representative prompts | "propusieras el problema primero, propusieras posibles soluciones y elijo una... y me propones bloques de código a modificar para cada fichero" (state the problem first, propose possible solutions and I choose one, then propose the code blocks to change in each file); then a "sí" for each block |
+| Affected files/sections | `WebConfig.kt`, `HelloController.kt`, `messages*.properties`, `application.properties`, the three test classes |
+| Validation steps | `./gradlew check` and `curl` against the running app. Running the code showed two bugs (fixed default locale, `fallback-to-system-locale`) that I fixed before the commit |
+| Citations | None |
+| Human-reviewed | I chose the cookie-based resolver over the session and the manual options, decided to localize `/api/hello` too, and approved each file |
 
-### Piece 3 — Remember the last valid name (optional)
+### Piece 2: Name validation
 
-- **Representative prompts:** "sí, elijo B, solo la página" (choosing the solution and scoping it); "opción 2 sí es la correcta" (choosing how to resolve the broken unit tests, after both options were explained).
-- **Affected files/sections:** see "What I changed" above.
-- **Validation steps:** `./gradlew clean check` and manual `curl` checks, run and read by me.
-- **Human-reviewed:** I picked option B over the manual and interceptor alternatives, scoped the feature to the page only, and decided how to resolve the compile break the change introduced.
+| Field | Entry |
+|---|---|
+| Representative prompts | "elijo B, esa regla vale" (I choose B, that rule is fine); then a "sí, aplícalo" (yes, apply it) for each block |
+| Affected files/sections | `HelloController.kt`, `ValidationExceptionHandler.kt`, `messages*.properties`, `welcome.html`, `HelloControllerMVCTests.kt` |
+| Validation steps | `./gradlew clean check` (17 tests at that point) and `curl` with 50 and 51 characters, on the page and on the API |
+| Citations | None |
+| Human-reviewed | I chose `@Size` on the parameter over a DTO or a manual check, and approved resolving the error text with `MessageSource` instead of Bean Validation's own message |
+
+### Piece 3: Remember the last valid name
+
+| Field | Entry |
+|---|---|
+| Representative prompts | "sí, elijo B, solo la página" (yes, I choose B, only the page); "opción 2 sí es la correcta" (option 2 is the right one), about the broken unit tests |
+| Affected files/sections | `HelloController.kt`, `HelloControllerMVCTests.kt`, `HelloControllerUnitTests.kt` |
+| Validation steps | `./gradlew clean check` (18 tests) and `curl` with and without the `name` cookie |
+| Citations | None |
+| Human-reviewed | I chose the controller option over an interceptor, limited the cookie to the page, and chose to remove the two broken unit tests |
+
+### Documentation
+
+| Field | Entry |
+|---|---|
+| Representative prompts | Not recorded |
+| Affected files/sections | KDoc in `HelloController.kt` and `ValidationExceptionHandler.kt`; the `My increment` section of `README.md` |
+| Validation steps | `./gradlew check`; I read the KDoc against the code |
+| Citations | None |
+| Human-reviewed | I approved the texts and kept the README change to one short section |
+
+### Review fixes
+
+| Field | Entry |
+|---|---|
+| Representative prompts | "Esto quiero que lo analices a fondo tendria que ser Hello World, Hola Mundo" (analyse this in depth, it should be Hello World, Hola Mundo); "ok a los tres, empieza por el fallo 1" (ok to the three, start with bug 1) |
+| Affected files/sections | `WebConfig.kt`, `HelloController.kt`, `application.properties`, `messages*.properties`, `IntegrationTest.kt`, `HelloControllerMVCTests.kt` (commits `8ad4a0a` to `ec08b34`) |
+| Validation steps | For each fix, a test written first and seen failing (see *How I verified*); then `./gradlew check` with a Spanish and an English JVM (26 tests) and `curl` against the real server |
+| Citations | None. Spring APIs were checked in the Spring 7 jars (`javap`) and by running the app |
+| Human-reviewed | I chose English when there is no `Accept-Language` over leaving it as it was, asked for "World" / "Mundo", and approved each fix and each commit. I rejected the assistant's first plan for the cookie (`URLEncoder` + `URLDecoder`) after a test showed that it would decode twice |
+
+### Report
+
+| Field | Entry |
+|---|---|
+| Representative prompts | "ok, adelante con What I changed" (ok, go on with What I changed); "ok, verifica ese dato y monta el REPORT" (ok, check that fact and put the report together) |
+| Affected files/sections | `REPORT.md`, sections *What I specified*, *What I changed*, *Technical decisions*, *How I verified* and this disclosure |
+| Validation steps | Every command in the report was run as written. Two facts about Piece 1 were checked again by running the app |
+| Citations | None |
+| Human-reviewed | I approved each section. Two sentences in the drafts were removed because they were not true |
