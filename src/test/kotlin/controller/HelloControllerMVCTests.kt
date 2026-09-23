@@ -5,7 +5,6 @@ import jakarta.servlet.http.Cookie
 import org.hamcrest.CoreMatchers.*
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
-import org.springframework.beans.factory.annotation.Value
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest
 import org.springframework.context.annotation.Import
 import org.springframework.http.MediaType
@@ -21,8 +20,7 @@ import java.util.Locale
 @WebMvcTest(HelloController::class, HelloApiController::class)
 @Import(WebConfig::class)
 class HelloControllerMVCTests {
-    @Value("\${app.message:Welcome to the Modern Web App!}")
-    private lateinit var message: String
+    private val message = "Welcome to the Modern Web App!"
 
     @Autowired
     private lateinit var mockMvc: MockMvc
