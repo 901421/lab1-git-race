@@ -95,15 +95,19 @@ class HelloApiController(
      * name across requests — every call must be explicit.
      *
      * @param name name to greet, at most [HelloController.MAX_NAME_LENGTH] characters.
+     *             If absent or empty, the localized `greeting.defaultName`
+     *             ("World", "Mundo") is used instead.
      * @return a map with `message` and `timestamp`.
      */
     @GetMapping("/api/hello", produces = [MediaType.APPLICATION_JSON_VALUE])
     fun helloApi(
-        @RequestParam(defaultValue = "World") @Size(max = HelloController.MAX_NAME_LENGTH) name: String
+        @RequestParam(required = false) @Size(max = HelloController.MAX_NAME_LENGTH) name: String?
     ): Map<String, String> {
         val locale = LocaleContextHolder.getLocale()
+        val effectiveName = name?.takeIf { it.isNotEmpty() }
+            ?: messageSource.getMessage("greeting.defaultName", null, locale)
         return mapOf(
-            "message" to messageSource.getMessage("greeting.named", arrayOf(name), locale),
+            "message" to messageSource.getMessage("greeting.named", arrayOf(effectiveName), locale),
             "timestamp" to Instant.now().toString()
         )
     }

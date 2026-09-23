@@ -75,6 +75,22 @@ class HelloControllerMVCTests {
     }
 
     @Test
+    fun `should greet the default name in English when the API gets no name`() {
+        mockMvc.perform(get("/api/hello").locale(Locale.ENGLISH))
+            .andDo(print())
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.message", equalTo("Hello, World!")))
+    }
+
+    @Test
+    fun `should translate the default name when the API gets no name in Spanish`() {
+        mockMvc.perform(get("/api/hello").locale(Locale.forLanguageTag("es")))
+            .andDo(print())
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.message", equalTo("¡Hola, Mundo!")))
+    }
+
+    @Test
     fun `should return 400 with friendly error when name exceeds max length on the page`() {
         val tooLong = "a".repeat(51)
         mockMvc.perform(get("/").param("name", tooLong).locale(Locale.ENGLISH))
