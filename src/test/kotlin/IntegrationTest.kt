@@ -34,9 +34,6 @@ class IntegrationTest {
         assertThat(response.body).contains("Client-Side Educational Tool")
     }
 
-    // Accept-Language is set explicitly here: without it, the locale falls
-    // back to the server's own default (see WebConfig), which would make
-    // this test's outcome depend on the machine running it.
     private fun withLanguage(tag: String): HttpEntity<Void> =
         HttpEntity(null, HttpHeaders().apply { set("Accept-Language", tag) })
 
@@ -79,6 +76,16 @@ class IntegrationTest {
         assertThat(response.headers.contentType).isEqualTo(MediaType.APPLICATION_JSON)
         assertThat(response.body).contains("Hello, Test!")
         assertThat(response.body).contains("timestamp")
+    }
+
+    // No Accept-Language header on purpose: the answer must be English on any
+    // machine, not the language of the JVM that happens to run the server.
+    @Test
+    fun `should answer in English when the request has no Accept-Language header`() {
+        val response = restTemplate.getForEntity("http://localhost:$port/api/hello?name=Test", String::class.java)
+
+        assertThat(response.statusCode).isEqualTo(HttpStatus.OK)
+        assertThat(response.body).contains("Hello, Test!")
     }
 
     @Test
