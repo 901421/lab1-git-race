@@ -38,7 +38,11 @@ class WebConfig : WebMvcConfigurer {
 
     @Bean
     fun localeChangeInterceptor(): LocaleChangeInterceptor =
-        LocaleChangeInterceptor().apply { paramName = "lang" }
+        LocaleChangeInterceptor().apply {
+            paramName = "lang"
+            // A malformed value such as ?lang=;; is ignored instead of failing with a 500.
+            isIgnoreInvalidLocale = true
+        }
 
     override fun addInterceptors(registry: InterceptorRegistry) {
         registry.addInterceptor(localeChangeInterceptor())

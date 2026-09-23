@@ -63,6 +63,14 @@ class HelloControllerMVCTests {
     }
 
     @Test
+    fun `should ignore an invalid lang query param instead of failing`() {
+        mockMvc.perform(get("/").param("lang", ";;").locale(Locale.ENGLISH))
+            .andDo(print())
+            .andExpect(status().isOk)
+            .andExpect(model().attribute("message", equalTo(message)))
+    }
+
+    @Test
     fun `should return API response as JSON in English`() {
         mockMvc.perform(get("/api/hello").param("name", "Test").locale(Locale.ENGLISH))
             .andDo(print())
