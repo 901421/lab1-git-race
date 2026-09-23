@@ -63,6 +63,24 @@ class HelloControllerMVCTests {
     }
 
     @Test
+    fun `should use the language remembered in the lang cookie`() {
+        mockMvc.perform(get("/").cookie(Cookie("lang", "es")).locale(Locale.ENGLISH))
+            .andDo(print())
+            .andExpect(status().isOk)
+            .andExpect(model().attribute("message", equalTo("¡Bienvenido a la aplicación web moderna!")))
+    }
+
+    // There is no messages_fr.properties, so the base (English) file is used,
+    // never the messages of the server's own locale.
+    @Test
+    fun `should fall back to English for an unsupported language`() {
+        mockMvc.perform(get("/").locale(Locale.FRENCH))
+            .andDo(print())
+            .andExpect(status().isOk)
+            .andExpect(model().attribute("message", equalTo(message)))
+    }
+
+    @Test
     fun `should ignore an invalid lang query param instead of failing`() {
         mockMvc.perform(get("/").param("lang", ";;").locale(Locale.ENGLISH))
             .andDo(print())
