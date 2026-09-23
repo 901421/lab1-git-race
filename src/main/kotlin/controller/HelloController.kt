@@ -14,6 +14,8 @@ import org.springframework.web.bind.annotation.CookieValue
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.RequestParam
 import org.springframework.web.bind.annotation.RestController
+import org.springframework.web.util.UriUtils
+import java.nio.charset.StandardCharsets
 import java.time.Duration
 import java.time.Instant
 
@@ -61,7 +63,10 @@ class HelloController(
         if (!name.isNullOrBlank()) {
             response.addHeader(
                 HttpHeaders.SET_COOKIE,
-                ResponseCookie.from("name", name).maxAge(NAME_COOKIE_MAX_AGE).path("/").build().toString()
+                // Cookie values cannot hold spaces or non-ASCII letters (e.g. "José María"),
+                // so the name is URL-encoded here; @CookieValue decodes it on the way back.
+                ResponseCookie.from("name", UriUtils.encode(name, StandardCharsets.UTF_8))
+                    .maxAge(NAME_COOKIE_MAX_AGE).path("/").build().toString()
             )
         }
 

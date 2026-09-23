@@ -116,6 +116,26 @@ class HelloControllerMVCTests {
             .andExpect(cookie().maxAge("name", 30 * 24 * 60 * 60))
     }
 
+    // Spaces and non-ASCII letters are not allowed raw in a cookie value, so
+    // the name is stored URL-encoded; @CookieValue decodes it when read back.
+    @Test
+    fun `should remember a name with spaces and accents`() {
+        mockMvc.perform(get("/").param("name", "José María").locale(Locale.ENGLISH))
+            .andDo(print())
+            .andExpect(status().isOk)
+            .andExpect(model().attribute("message", equalTo("Hello, José María!")))
+            .andExpect(cookie().value("name", "Jos%C3%A9%20Mar%C3%ADa"))
+    }
+
+    @Test
+    fun `should decode a remembered name with spaces and accents`() {
+        mockMvc.perform(get("/").cookie(Cookie("name", "Jos%C3%A9%20Mar%C3%ADa")).locale(Locale.ENGLISH))
+            .andDo(print())
+            .andExpect(status().isOk)
+            .andExpect(model().attribute("message", equalTo("Hello, José María!")))
+            .andExpect(model().attribute("name", equalTo("José María")))
+    }
+
     @Test
     fun `should greet using the remembered name when none is provided in the URL`() {
         mockMvc.perform(get("/").cookie(Cookie("name", "Ana")).locale(Locale.ENGLISH))
