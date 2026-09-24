@@ -1,10 +1,13 @@
 package es.unizar.webeng.hello.controller
 
 import es.unizar.webeng.hello.history.GreetingHistory
+import es.unizar.webeng.hello.history.GreetingView
 import jakarta.servlet.http.HttpServletResponse
 import jakarta.validation.constraints.Size
+import org.slf4j.LoggerFactory
 import org.springframework.context.MessageSource
 import org.springframework.context.i18n.LocaleContextHolder
+import org.springframework.dao.DataAccessException
 import org.springframework.http.HttpHeaders
 import org.springframework.http.MediaType
 import org.springframework.http.ResponseCookie
@@ -35,6 +38,8 @@ class HelloController(
         const val MAX_NAME_LENGTH = 50
         private val NAME_COOKIE_MAX_AGE: Duration = Duration.ofDays(30)
     }
+
+    private val log = LoggerFactory.getLogger(HelloController::class.java)
 
     /**
      * Renders the welcome page with a personalized, locale-aware greeting.
@@ -76,6 +81,17 @@ class HelloController(
 
         model.addAttribute("message", greetingFor(effectiveName))
         model.addAttribute("name", effectiveName)
+
+        // Read after record(), so a name sent now is already in the list.
+        // A database error hides the list but never breaks the page.
+        val history = try {
+            greetingHistory.latest()
+        } catch (e: DataAccessException) {
+            log.warn("Could not read the greeting history", e)
+            null
+        }
+        model.addAttribute("history", history ?: emptyList<GreetingView>())
+        model.addAttribute("historyUnavailable", history == null)
         return "welcome"
     }
 

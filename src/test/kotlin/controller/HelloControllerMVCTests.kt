@@ -2,20 +2,25 @@ package es.unizar.webeng.hello.controller
 
 import es.unizar.webeng.hello.config.WebConfig
 import es.unizar.webeng.hello.history.GreetingHistory
+import es.unizar.webeng.hello.history.GreetingView
 import jakarta.servlet.http.Cookie
 import org.hamcrest.CoreMatchers.*
+import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
+import org.mockito.Mockito.mockingDetails
 import org.mockito.Mockito.verify
-import org.mockito.Mockito.verifyNoInteractions
+import org.mockito.Mockito.`when`
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest
 import org.springframework.context.annotation.Import
+import org.springframework.dao.DataAccessResourceFailureException
 import org.springframework.http.MediaType
 import org.springframework.test.context.bean.override.mockito.MockitoBean
 import org.springframework.test.web.servlet.MockMvc
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*
 import org.springframework.test.web.servlet.result.MockMvcResultHandlers.*
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.*
+import java.time.Instant
 import java.util.Locale
 
 // WebConfig is imported explicitly: @WebMvcTest only scans controllers by
@@ -209,7 +214,7 @@ class HelloControllerMVCTests {
         mockMvc.perform(get("/").cookie(Cookie("name", "Ana")).locale(Locale.ENGLISH))
             .andExpect(status().isOk)
 
-        verifyNoInteractions(greetingHistory)
+        assertNothingRecorded()
     }
 
     @Test
@@ -219,7 +224,7 @@ class HelloControllerMVCTests {
         mockMvc.perform(get("/api/hello").locale(Locale.ENGLISH)).andExpect(status().isOk)
         mockMvc.perform(get("/api/hello").param("name", "").locale(Locale.ENGLISH)).andExpect(status().isOk)
 
-        verifyNoInteractions(greetingHistory)
+        assertNothingRecorded()
     }
 
     @Test
@@ -230,6 +235,61 @@ class HelloControllerMVCTests {
         mockMvc.perform(get("/api/hello").param("name", tooLong).locale(Locale.ENGLISH))
             .andExpect(status().isBadRequest)
 
-        verifyNoInteractions(greetingHistory)
+        assertNothingRecorded()
+    }
+
+    // The page always reads the history, so only record() calls are checked
+    private fun assertNothingRecorded() {
+        assertThat(mockingDetails(greetingHistory).invocations.map { it.method.name }).doesNotContain("record")
+    }
+
+    @Test
+    fun `should show the greeting history on the page`() {
+        `when`(greetingHistory.latest()).thenReturn(
+            listOf(GreetingView("Ana", "es", Instant.parse("2026-09-24T10:00:00Z")))
+        )
+
+        mockMvc.perform(get("/").locale(Locale.ENGLISH))
+            .andExpect(status().isOk)
+            .andExpect(content().string(containsString("Recent greetings")))
+            .andExpect(content().string(containsString("<strong>Ana</strong>")))
+            .andExpect(content().string(containsString("<span>es</span>")))
+            .andExpect(content().string(containsString("2026-09-24 10:00 UTC")))
+    }
+
+    @Test
+    fun `should say there are no greetings yet when the history is empty`() {
+        mockMvc.perform(get("/").locale(Locale.ENGLISH))
+            .andExpect(status().isOk)
+            .andExpect(content().string(containsString("No greetings yet.")))
+    }
+
+    @Test
+    fun `should show the history title in Spanish`() {
+        mockMvc.perform(get("/").locale(Locale.forLanguageTag("es")))
+            .andExpect(status().isOk)
+            .andExpect(content().string(containsString("Saludos recientes")))
+    }
+
+    @Test
+    fun `should still show the page when the history cannot be read`() {
+        `when`(greetingHistory.latest()).thenThrow(DataAccessResourceFailureException("database is down"))
+
+        mockMvc.perform(get("/").param("name", "Ana").locale(Locale.ENGLISH))
+            .andExpect(status().isOk)
+            .andExpect(model().attribute("message", equalTo("Hello, Ana!")))
+            .andExpect(content().string(containsString("History not available.")))
+    }
+
+    @Test
+    fun `should escape HTML in a stored name`() {
+        `when`(greetingHistory.latest()).thenReturn(
+            listOf(GreetingView("<script>alert(1)</script>", "en", Instant.parse("2026-09-24T10:00:00Z")))
+        )
+
+        mockMvc.perform(get("/").locale(Locale.ENGLISH))
+            .andExpect(status().isOk)
+            .andExpect(content().string(containsString("&lt;script&gt;alert(1)&lt;/script&gt;")))
+            .andExpect(content().string(not(containsString("<script>alert(1)"))))
     }
 }

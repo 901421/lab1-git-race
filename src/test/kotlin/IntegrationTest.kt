@@ -146,4 +146,13 @@ class IntegrationTest {
         assertThat(response.headers.contentType).isEqualTo(MediaType.APPLICATION_JSON)
         assertThat(response.body).startsWith("""[{"name":"Ana","locale":"es","timestamp":""")
     }
+
+    @Test
+    fun `should show a stored greeting in the history on the page`() {
+        val response = restTemplate.getForEntity("http://localhost:$port/?name=Ana", String::class.java)
+
+        assertThat(response.statusCode).isEqualTo(HttpStatus.OK)
+        assertThat(response.body).contains("Recent greetings")
+        assertThat(response.body).contains("<strong>Ana</strong>")
+    }
 }
