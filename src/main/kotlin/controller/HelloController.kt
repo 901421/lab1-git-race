@@ -52,7 +52,8 @@ class HelloController(
      * A non-blank [name] sent in the query string is also recorded in the
      * greeting history. The page then lists the latest greetings. If the
      * history cannot be read, the list is replaced by a short notice and the
-     * page still works.
+     * page still works. Otherwise the page also receives the id where its live
+     * stream starts (`lastGreetingId`).
      *
      * @param model Spring MVC model, populated with `message`, `name`,
      *              `history`, `historyUnavailable` and `lastGreetingId`.
