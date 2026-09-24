@@ -55,7 +55,9 @@ empty history.
 
 ```bash
 curl "http://localhost:8080/api/hello?name=Ana"
-curl "http://localhost:8080/api/greetings"   # [{"name":"Ana","locale":"en","timestamp":"..."}]
+curl "http://localhost:8080/api/greetings"
+# With an empty history and all the commands in this section, newest first:
+# [{"name":"Ana","locale":"en","timestamp":"..."},{"name":"Ana","locale":"es","timestamp":"..."}]
 ```
 
 ## License

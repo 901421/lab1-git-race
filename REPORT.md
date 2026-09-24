@@ -180,13 +180,13 @@ Each point says what I chose, what I rejected and why.
 ./gradlew clean check
 ```
 
-BUILD SUCCESSFUL, 26 tests, 0 failures. My machine runs with a Spanish locale, so I also ran the tests with an English JVM, to be sure they do not depend on the machine:
+BUILD SUCCESSFUL, 46 tests, 0 failures: 26 for the increment and 20 for the bonus (see *Bonus: greeting history* below). My machine runs with a Spanish locale, so I also ran the tests with an English JVM, to be sure they do not depend on the machine:
 
 ```bash
 LANG=en_US.UTF-8 JAVA_TOOL_OPTIONS="-Duser.language=en -Duser.country=US" ./gradlew check --rerun-tasks
 ```
 
-Same result: 26 tests, 0 failures.
+Same result: 46 tests, 0 failures.
 
 ### What failed first, and what I fixed
 
