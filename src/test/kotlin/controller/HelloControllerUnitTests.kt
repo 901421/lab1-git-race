@@ -1,9 +1,11 @@
 package es.unizar.webeng.hello.controller
 
+import es.unizar.webeng.hello.history.GreetingHistory
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import org.mockito.Mockito.mock
 import org.springframework.context.i18n.LocaleContextHolder
 import org.springframework.context.support.StaticMessageSource
 import java.util.Locale
@@ -37,7 +39,7 @@ class HelloControllerUnitTests {
 
     @Test
     fun `should return API response with timestamp`() {
-        val apiController = HelloApiController(testMessageSource())
+        val apiController = HelloApiController(testMessageSource(), mock(GreetingHistory::class.java))
         val response = apiController.helloApi("Test")
 
         assertThat(response).containsKey("message")

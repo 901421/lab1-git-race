@@ -17,7 +17,7 @@ import java.time.Instant
 class Greeting(
     @Column(nullable = false, length = HelloController.MAX_NAME_LENGTH)
     val name: String,
-    /** Language tag of the response, e.g. `en` or `es`. */
+    /** Language the visitor asked for, e.g. `en`, `es` or `fr` (without region). */
     @Column(nullable = false, length = 35)
     val locale: String,
     @Column(nullable = false)

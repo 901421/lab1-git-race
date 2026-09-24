@@ -1,5 +1,6 @@
 package es.unizar.webeng.hello
 
+import es.unizar.webeng.hello.history.GreetingRepository
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
@@ -22,6 +23,9 @@ class IntegrationTest {
 
     @Autowired
     private lateinit var restTemplate: TestRestTemplate
+
+    @Autowired
+    private lateinit var greetingRepository: GreetingRepository
 
     @Test
     fun `should return home page with modern title and client-side HTTP debug`() {
@@ -116,5 +120,17 @@ class IntegrationTest {
         assertThat(response.body).contains("API Endpoint")
         assertThat(response.body).contains("Health Check")
         assertThat(response.body).contains("Learning Notes:")
+    }
+
+    @Test
+    fun `should store a named greeting in the database`() {
+        val response = restTemplate.exchange(
+            "http://localhost:$port/api/hello?name=Ana", HttpMethod.GET, withLanguage("es-ES"), String::class.java
+        )
+
+        assertThat(response.statusCode).isEqualTo(HttpStatus.OK)
+        val latest = greetingRepository.findTop10ByOrderByCreatedAtDescIdDesc().first()
+        assertThat(latest.name).isEqualTo("Ana")
+        assertThat(latest.locale).isEqualTo("es")
     }
 }

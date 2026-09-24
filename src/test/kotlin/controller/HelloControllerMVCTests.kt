@@ -1,13 +1,17 @@
 package es.unizar.webeng.hello.controller
 
 import es.unizar.webeng.hello.config.WebConfig
+import es.unizar.webeng.hello.history.GreetingHistory
 import jakarta.servlet.http.Cookie
 import org.hamcrest.CoreMatchers.*
 import org.junit.jupiter.api.Test
+import org.mockito.Mockito.verify
+import org.mockito.Mockito.verifyNoInteractions
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest
 import org.springframework.context.annotation.Import
 import org.springframework.http.MediaType
+import org.springframework.test.context.bean.override.mockito.MockitoBean
 import org.springframework.test.web.servlet.MockMvc
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*
 import org.springframework.test.web.servlet.result.MockMvcResultHandlers.*
@@ -24,6 +28,10 @@ class HelloControllerMVCTests {
 
     @Autowired
     private lateinit var mockMvc: MockMvc
+
+    // The history needs a database, which this web-only slice does not start
+    @MockitoBean
+    private lateinit var greetingHistory: GreetingHistory
 
     @Test
     fun `should return home page with default message in English`() {
@@ -178,5 +186,50 @@ class HelloControllerMVCTests {
             .andExpect(status().isOk)
             .andExpect(model().attribute("message", equalTo(message)))
             .andExpect(model().attribute("name", equalTo("")))
+    }
+
+    @Test
+    fun `should record a name sent to the page`() {
+        mockMvc.perform(get("/").param("name", "Ana").locale(Locale.forLanguageTag("es")))
+            .andExpect(status().isOk)
+
+        verify(greetingHistory).record("Ana", Locale.forLanguageTag("es"))
+    }
+
+    @Test
+    fun `should record a name sent to the API`() {
+        mockMvc.perform(get("/api/hello").param("name", "Ana").locale(Locale.ENGLISH))
+            .andExpect(status().isOk)
+
+        verify(greetingHistory).record("Ana", Locale.ENGLISH)
+    }
+
+    @Test
+    fun `should not record the name remembered in the cookie`() {
+        mockMvc.perform(get("/").cookie(Cookie("name", "Ana")).locale(Locale.ENGLISH))
+            .andExpect(status().isOk)
+
+        verifyNoInteractions(greetingHistory)
+    }
+
+    @Test
+    fun `should not record a missing or empty name`() {
+        mockMvc.perform(get("/").locale(Locale.ENGLISH)).andExpect(status().isOk)
+        mockMvc.perform(get("/").param("name", "").locale(Locale.ENGLISH)).andExpect(status().isOk)
+        mockMvc.perform(get("/api/hello").locale(Locale.ENGLISH)).andExpect(status().isOk)
+        mockMvc.perform(get("/api/hello").param("name", "").locale(Locale.ENGLISH)).andExpect(status().isOk)
+
+        verifyNoInteractions(greetingHistory)
+    }
+
+    @Test
+    fun `should not record a name that is too long`() {
+        val tooLong = "a".repeat(HelloController.MAX_NAME_LENGTH + 1)
+        mockMvc.perform(get("/").param("name", tooLong).locale(Locale.ENGLISH))
+            .andExpect(status().isBadRequest)
+        mockMvc.perform(get("/api/hello").param("name", tooLong).locale(Locale.ENGLISH))
+            .andExpect(status().isBadRequest)
+
+        verifyNoInteractions(greetingHistory)
     }
 }

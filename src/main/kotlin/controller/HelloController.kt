@@ -1,5 +1,6 @@
 package es.unizar.webeng.hello.controller
 
+import es.unizar.webeng.hello.history.GreetingHistory
 import jakarta.servlet.http.HttpServletResponse
 import jakarta.validation.constraints.Size
 import org.springframework.context.MessageSource
@@ -26,7 +27,8 @@ import java.time.Instant
 @Controller
 @Validated
 class HelloController(
-    private val messageSource: MessageSource
+    private val messageSource: MessageSource,
+    private val greetingHistory: GreetingHistory
 ) {
 
     companion object {
@@ -68,6 +70,8 @@ class HelloController(
                 ResponseCookie.from("name", UriUtils.encode(name, StandardCharsets.UTF_8))
                     .maxAge(NAME_COOKIE_MAX_AGE).path("/").build().toString()
             )
+            // Only a name sent in this request is recorded, not one from the cookie
+            greetingHistory.record(name, LocaleContextHolder.getLocale())
         }
 
         model.addAttribute("message", greetingFor(effectiveName))
@@ -90,7 +94,8 @@ class HelloController(
 @RestController
 @Validated
 class HelloApiController(
-    private val messageSource: MessageSource
+    private val messageSource: MessageSource,
+    private val greetingHistory: GreetingHistory
 ) {
 
     /**
@@ -109,6 +114,7 @@ class HelloApiController(
         @RequestParam(required = false) @Size(max = HelloController.MAX_NAME_LENGTH) name: String?
     ): Map<String, String> {
         val locale = LocaleContextHolder.getLocale()
+        if (!name.isNullOrBlank()) greetingHistory.record(name, locale)
         val effectiveName = name?.takeIf { it.isNotEmpty() }
             ?: messageSource.getMessage("greeting.defaultName", null, locale)
         return mapOf(
