@@ -49,7 +49,13 @@ class HelloController(
      * request only); otherwise the value remembered in the `name` cookie, if
      * any. A valid, non-blank [name] is (re)stored in that cookie for 30 days.
      *
-     * @param model Spring MVC model, populated with `message` and `name`.
+     * A non-blank [name] sent in the query string is also recorded in the
+     * greeting history. The page then lists the latest greetings. If the
+     * history cannot be read, the list is replaced by a short notice and the
+     * page still works.
+     *
+     * @param model Spring MVC model, populated with `message`, `name`,
+     *              `history` and `historyUnavailable`.
      * @param response used to set the `name` cookie when applicable.
      * @param name name from the query string, at most [MAX_NAME_LENGTH] characters.
      * @param rememberedName name remembered from a previous visit, via cookie.
@@ -119,6 +125,7 @@ class HelloApiController(
      *
      * Unlike [HelloController.welcome], this endpoint does not remember the
      * name across requests — every call must be explicit.
+     * A non-blank [name] is recorded in the greeting history.
      *
      * @param name name to greet, at most [HelloController.MAX_NAME_LENGTH] characters.
      *             If absent or empty, the localized `greeting.defaultName`
