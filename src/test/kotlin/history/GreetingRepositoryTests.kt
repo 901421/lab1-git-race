@@ -43,4 +43,15 @@ class GreetingRepositoryTests {
         assertThat(latest).hasSize(10)
         assertThat(latest.map { it.name }).containsExactlyElementsOf((12 downTo 3).map { "Name$it" })
     }
+
+    @Test
+    fun `should return the 10 most recent greetings after an id`() {
+        val stored = (1..12).map { i -> entityManager.persist(Greeting("Name$i", "en", base.plusSeconds(i.toLong()))) }
+        entityManager.flush()
+
+        val missed = repository.findTop10ByIdGreaterThanOrderByIdDesc(stored.first().id!!)
+
+        // 11 greetings came after the first one; the oldest of them (Name2) is left out
+        assertThat(missed.map { it.name }).containsExactlyElementsOf((12 downTo 3).map { "Name$it" })
+    }
 }

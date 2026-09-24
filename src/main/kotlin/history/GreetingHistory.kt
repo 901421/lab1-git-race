@@ -27,4 +27,12 @@ class GreetingHistory(private val repository: GreetingRepository) {
     fun latest(): List<GreetingView> =
         repository.findTop10ByOrderByCreatedAtDescIdDesc()
             .map { GreetingView(it.name, it.locale, it.createdAt) }
+
+    /**
+     * Up to 10 greetings stored after [id], oldest first, so they can be sent
+     * in order. If more were missed, only the 10 most recent are returned.
+     * A database error is not caught here.
+     */
+    fun since(id: Long): List<Greeting> =
+        repository.findTop10ByIdGreaterThanOrderByIdDesc(id).reversed()
 }

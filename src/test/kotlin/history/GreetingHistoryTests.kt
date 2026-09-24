@@ -46,4 +46,14 @@ class GreetingHistoryTests {
 
         assertThat(history.latest()).containsExactly(GreetingView("Ana", "es", createdAt))
     }
+
+    @Test
+    fun `should return the missed greetings oldest first`() {
+        val createdAt = Instant.parse("2026-09-24T10:00:00Z")
+        `when`(repository.findTop10ByIdGreaterThanOrderByIdDesc(5)).thenReturn(
+            listOf(Greeting("Luis", "fr", createdAt, id = 7), Greeting("Ana", "es", createdAt, id = 6))
+        )
+
+        assertThat(history.since(5).map { it.id }).containsExactly(6L, 7L)
+    }
 }

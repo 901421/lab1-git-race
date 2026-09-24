@@ -39,6 +39,11 @@ class GreetingStream {
         return emitter
     }
 
+    /** Forgets [emitter] without sending anything, e.g. when opening it failed. */
+    internal fun forget(emitter: SseEmitter) {
+        emitters.remove(emitter)
+    }
+
     /** Sends a stored [greeting] to every open connection. */
     fun publish(greeting: Greeting) {
         emitters.forEach { send(it, greeting) }
