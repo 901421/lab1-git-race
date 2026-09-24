@@ -7,6 +7,7 @@ import org.mockito.ArgumentCaptor
 import org.mockito.ArgumentMatchers.any
 import org.mockito.Mockito.mock
 import org.mockito.Mockito.verify
+import org.mockito.Mockito.verifyNoInteractions
 import org.mockito.Mockito.`when`
 import org.springframework.dao.DataAccessResourceFailureException
 import java.time.Instant
@@ -15,7 +16,8 @@ import java.util.Locale
 class GreetingHistoryTests {
 
     private val repository = mock(GreetingRepository::class.java)
-    private val history = GreetingHistory(repository)
+    private val stream = mock(GreetingStream::class.java)
+    private val history = GreetingHistory(repository, stream)
 
     @Test
     fun `should store the name with the language but not the region`() {
@@ -36,6 +38,26 @@ class GreetingHistoryTests {
             .thenThrow(DataAccessResourceFailureException("database is down"))
 
         assertThatCode { history.record("Ana", Locale.ENGLISH) }.doesNotThrowAnyException()
+    }
+
+    @Test
+    fun `should publish the greeting once it is stored`() {
+        val stored = Greeting("Ana", "es", id = 7)
+        `when`(repository.save(any(Greeting::class.java))).thenReturn(stored)
+
+        history.record("Ana", Locale.forLanguageTag("es"))
+
+        verify(stream).publish(stored)
+    }
+
+    @Test
+    fun `should not publish when the greeting could not be stored`() {
+        `when`(repository.save(any(Greeting::class.java)))
+            .thenThrow(DataAccessResourceFailureException("database is down"))
+
+        history.record("Ana", Locale.ENGLISH)
+
+        verifyNoInteractions(stream)
     }
 
     @Test
