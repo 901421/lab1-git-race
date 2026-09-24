@@ -1,9 +1,13 @@
 package es.unizar.webeng.hello.controller
 
+import es.unizar.webeng.hello.history.GreetingHistory
+import es.unizar.webeng.hello.history.GreetingView
 import jakarta.servlet.http.HttpServletResponse
 import jakarta.validation.constraints.Size
+import org.slf4j.LoggerFactory
 import org.springframework.context.MessageSource
 import org.springframework.context.i18n.LocaleContextHolder
+import org.springframework.dao.DataAccessException
 import org.springframework.http.HttpHeaders
 import org.springframework.http.MediaType
 import org.springframework.http.ResponseCookie
@@ -26,13 +30,16 @@ import java.time.Instant
 @Controller
 @Validated
 class HelloController(
-    private val messageSource: MessageSource
+    private val messageSource: MessageSource,
+    private val greetingHistory: GreetingHistory
 ) {
 
     companion object {
         const val MAX_NAME_LENGTH = 50
         private val NAME_COOKIE_MAX_AGE: Duration = Duration.ofDays(30)
     }
+
+    private val log = LoggerFactory.getLogger(HelloController::class.java)
 
     /**
      * Renders the welcome page with a personalized, locale-aware greeting.
@@ -42,7 +49,13 @@ class HelloController(
      * request only); otherwise the value remembered in the `name` cookie, if
      * any. A valid, non-blank [name] is (re)stored in that cookie for 30 days.
      *
-     * @param model Spring MVC model, populated with `message` and `name`.
+     * A non-blank [name] sent in the query string is also recorded in the
+     * greeting history. The page then lists the latest greetings. If the
+     * history cannot be read, the list is replaced by a short notice and the
+     * page still works.
+     *
+     * @param model Spring MVC model, populated with `message`, `name`,
+     *              `history` and `historyUnavailable`.
      * @param response used to set the `name` cookie when applicable.
      * @param name name from the query string, at most [MAX_NAME_LENGTH] characters.
      * @param rememberedName name remembered from a previous visit, via cookie.
@@ -68,10 +81,23 @@ class HelloController(
                 ResponseCookie.from("name", UriUtils.encode(name, StandardCharsets.UTF_8))
                     .maxAge(NAME_COOKIE_MAX_AGE).path("/").build().toString()
             )
+            // Only a name sent in this request is recorded, not one from the cookie
+            greetingHistory.record(name, LocaleContextHolder.getLocale())
         }
 
         model.addAttribute("message", greetingFor(effectiveName))
         model.addAttribute("name", effectiveName)
+
+        // Read after record(), so a name sent now is already in the list.
+        // A database error hides the list but never breaks the page.
+        val history = try {
+            greetingHistory.latest()
+        } catch (e: DataAccessException) {
+            log.warn("Could not read the greeting history", e)
+            null
+        }
+        model.addAttribute("history", history ?: emptyList<GreetingView>())
+        model.addAttribute("historyUnavailable", history == null)
         return "welcome"
     }
 
@@ -90,7 +116,8 @@ class HelloController(
 @RestController
 @Validated
 class HelloApiController(
-    private val messageSource: MessageSource
+    private val messageSource: MessageSource,
+    private val greetingHistory: GreetingHistory
 ) {
 
     /**
@@ -98,6 +125,7 @@ class HelloApiController(
      *
      * Unlike [HelloController.welcome], this endpoint does not remember the
      * name across requests — every call must be explicit.
+     * A non-blank [name] is recorded in the greeting history.
      *
      * @param name name to greet, at most [HelloController.MAX_NAME_LENGTH] characters.
      *             If absent or empty, the localized `greeting.defaultName`
@@ -109,6 +137,7 @@ class HelloApiController(
         @RequestParam(required = false) @Size(max = HelloController.MAX_NAME_LENGTH) name: String?
     ): Map<String, String> {
         val locale = LocaleContextHolder.getLocale()
+        if (!name.isNullOrBlank()) greetingHistory.record(name, locale)
         val effectiveName = name?.takeIf { it.isNotEmpty() }
             ?: messageSource.getMessage("greeting.defaultName", null, locale)
         return mapOf(

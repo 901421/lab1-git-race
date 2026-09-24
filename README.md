@@ -47,6 +47,17 @@ curl -H "Accept-Language: es" "http://localhost:8080/?name=Ana"
 curl "http://localhost:8080/?name=$(python3 -c 'print("a"*51)')"   # 400, name too long
 ```
 
+**Bonus: greeting history.** When a request sends a `name`, the greeting is
+stored in an H2 database file (`./data/greetings.mv.db`), so it survives a
+restart. The 10 most recent greetings are returned by `GET /api/greetings`
+and listed on the home page. Delete the `data/` folder to start with an
+empty history.
+
+```bash
+curl "http://localhost:8080/api/hello?name=Ana"
+curl "http://localhost:8080/api/greetings"   # [{"name":"Ana","locale":"en","timestamp":"..."}]
+```
+
 ## License
 
 MIT — see `LICENSE`.

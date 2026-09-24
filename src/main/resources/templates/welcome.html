@@ -36,6 +36,20 @@
                         <div class="alert alert-danger" th:if="${error}" th:text="${error}">
                             Name is invalid.
                         </div>
+
+                        <!-- Greeting history (bonus): rendered by the server, names escaped by th:text -->
+                        <div class="text-start mt-4" th:if="${history != null}">
+                            <h2 class="h5" th:text="#{history.title}">Recent greetings</h2>
+                            <p class="text-muted" th:if="${historyUnavailable}" th:text="#{history.unavailable}">History not available.</p>
+                            <p class="text-muted" th:if="${!historyUnavailable and #lists.isEmpty(history)}" th:text="#{history.empty}">No greetings yet.</p>
+                            <ul class="list-unstyled mb-0" th:unless="${#lists.isEmpty(history)}">
+                                <li th:each="g : ${history}">
+                                    <strong th:text="${g.name}">Ana</strong> ·
+                                    <span th:text="${g.locale}">es</span> ·
+                                    <span th:text="${#temporals.format(g.timestamp, 'yyyy-MM-dd HH:mm', 'UTC') + ' UTC'}">2026-09-24 08:46 UTC</span>
+                                </li>
+                            </ul>
+                        </div>
                         
                         <!-- HTTP Debug Section -->
                         <div class="row mt-4">
