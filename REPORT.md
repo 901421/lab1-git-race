@@ -308,6 +308,7 @@ Summary of the uses:
 | Documentation | Claude Code (Sonnet 5) | KDoc drafts and the `README.md` note |
 | Review fixes | Claude Code (Opus 5.5), with a local lab-workflow skill (`/practica`) | Check the increment against the guide, test edge cases, find bugs, propose tests and fixes |
 | Report | Claude Code (Opus 5.5), with a local writing-style skill (`/memoria-sin-ia`) | Draft sections 1 to 4 of this report from the facts in the repository, in plain English |
+| Bonus: greeting history | Claude Code (Opus 5.5), with `/practica` and `/memoria-sin-ia` | For each block, options with trade-offs and a recommendation; code and tests after my approval; checks run in my terminal; draft of the bonus sections of this report |
 
 ### Piece 1: Locale-aware greeting
 
@@ -368,3 +369,13 @@ Summary of the uses:
 | Validation steps | Every command in the report was run as written. Two facts about Piece 1 were checked again by running the app |
 | Citations | None |
 | Human-reviewed | I approved each section. Two sentences in the drafts were removed because they were not true |
+
+### Bonus: greeting history
+
+| Field | Entry |
+|---|---|
+| Representative prompts | "desarolla este punto y vuelve a proponermelo" (develop this point and propose it again), about which language to store; "que quieres decir con eso de los 10 most recent ones, que la bd se sobreescribe?" (what do you mean by "the 10 most recent ones", is the database overwritten?); "seria un error 404 puede ser, analiza esto" (maybe it should be a 404 error, analyse this); "antes de proceder explicame exactamente que devuelve con un ejemplo calro secuencia real" (before going on, explain exactly what it returns with a clear example, a real sequence) |
+| Affected files/sections | Package `history` (5 classes), `HelloController.kt`, `welcome.html`, `messages*.properties`, `application.properties`, `build.gradle.kts`, `libs.versions.toml`, `.gitignore`, the test classes, `README.md` and the bonus sections of this report (commits `2118a76` to the one that adds this table, on the branch `feature/greeting-history`) |
+| Validation steps | `./gradlew clean check` after each block (26, 28, 36, 40 and 46 tests), with a Spanish and an English JVM; each rule broken on purpose to see its test fail; `curl` against the real server, including a restart; the commands in *How to run and test the bonus* run as written |
+| Citations | None. Spring and Thymeleaf APIs were checked in the jars of the versions used (for example the package of `@DataJpaTest` in Boot 4.1 and `#temporals.format`) |
+| Human-reviewed | I chose every design decision from the options, 15 in total (what to store, the API shape, how the page shows the history, where the documentation goes). I asked for more analysis twice: which language to store, and my own idea of answering 404 with a custom page, which I dropped after the analysis. I asked to reword a commit message that could be misread, and approved each block and each commit before it was made |
