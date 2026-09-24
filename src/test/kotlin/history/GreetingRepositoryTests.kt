@@ -32,6 +32,17 @@ class GreetingRepositoryTests {
     }
 
     @Test
+    fun `should read back exactly the time it was created with`() {
+        val saved = entityManager.persistAndFlush(Greeting("Ana", "es"))
+        entityManager.clear()
+
+        val found = repository.findById(saved.id!!).orElseThrow()
+
+        // The live stream sends the time from memory; it must match what is stored
+        assertThat(found.createdAt).isEqualTo(saved.createdAt)
+    }
+
+    @Test
     fun `should return the 10 most recent greetings, newest first`() {
         (1..12).forEach { i ->
             entityManager.persist(Greeting("Name$i", "en", base.plusSeconds(i.toLong())))
