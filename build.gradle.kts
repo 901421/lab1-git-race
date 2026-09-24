@@ -36,10 +36,12 @@ dependencies {
     implementation(libs.spring.boot.starter.thymeleaf)
     implementation(libs.spring.boot.starter.actuator)
     implementation(libs.spring.boot.starter.validation)
+    implementation(libs.spring.boot.starter.data.jpa)
     implementation(libs.jackson.module.kotlin)
     implementation(libs.bootstrap)
     implementation(libs.webjars.locator.lite)
     runtimeOnly(libs.kotlin.reflect)
+    runtimeOnly(libs.h2)
     developmentOnly(libs.spring.boot.devtools)
 
     testImplementation(libs.spring.boot.starter.test)
@@ -50,6 +52,8 @@ dependencies {
 
 tasks.withType<Test> {
     useJUnitPlatform()
+    // Tests use a throwaway in-memory database, never the file in ./data
+    systemProperty("spring.datasource.url", "jdbc:h2:mem:testdb")
 }
 
 tasks.withType<BootRun> {
