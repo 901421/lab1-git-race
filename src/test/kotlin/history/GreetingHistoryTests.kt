@@ -66,7 +66,7 @@ class GreetingHistoryTests {
         `when`(repository.findTop10ByOrderByCreatedAtDescIdDesc())
             .thenReturn(listOf(Greeting("Ana", "es", createdAt, id = 7)))
 
-        assertThat(history.latest()).containsExactly(GreetingView("Ana", "es", createdAt))
+        assertThat(history.latest()).containsExactly(GreetingView("Ana", "es", createdAt, id = 7))
     }
 
     @Test

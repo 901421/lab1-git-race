@@ -36,7 +36,7 @@ class GreetingHistory(
     /** The 10 most recent greetings, newest first. A database error is not caught here. */
     fun latest(): List<GreetingView> =
         repository.findTop10ByOrderByCreatedAtDescIdDesc()
-            .map { GreetingView(it.name, it.locale, it.createdAt) }
+            .map { it.toView() }
 
     /**
      * Up to 10 greetings stored after [id], oldest first, so they can be sent

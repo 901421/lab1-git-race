@@ -43,8 +43,8 @@ class GreetingHistoryControllerTests {
     fun `should return the history as a JSON array, newest first`() {
         `when`(greetingHistory.latest()).thenReturn(
             listOf(
-                GreetingView("Luis", "fr", Instant.parse("2026-09-24T10:00:05Z")),
-                GreetingView("Ana", "es", Instant.parse("2026-09-24T10:00:00Z"))
+                GreetingView("Luis", "fr", Instant.parse("2026-09-24T10:00:05Z"), id = 2),
+                GreetingView("Ana", "es", Instant.parse("2026-09-24T10:00:00Z"), id = 1)
             )
         )
 

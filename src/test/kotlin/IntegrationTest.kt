@@ -193,4 +193,12 @@ class IntegrationTest {
         assertThat(event.get(5, TimeUnit.SECONDS)).contains("\"name\":\"Eva\"")
         lines.close()
     }
+
+    @Test
+    fun `should serve the live history script`() {
+        val response = restTemplate.getForEntity("http://localhost:$port/js/greeting-stream.js", String::class.java)
+
+        assertThat(response.statusCode).isEqualTo(HttpStatus.OK)
+        assertThat(response.body).contains("EventSource")
+    }
 }

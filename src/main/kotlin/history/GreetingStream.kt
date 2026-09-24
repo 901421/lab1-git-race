@@ -53,8 +53,8 @@ class GreetingStream {
     fun send(emitter: SseEmitter, greeting: Greeting) {
         val event = SseEmitter.event()
             .name("greeting")
-            .id(checkNotNull(greeting.id) { "Only stored greetings can be sent" }.toString())
-            .data(GreetingView(greeting.name, greeting.locale, greeting.createdAt), MediaType.APPLICATION_JSON)
+            .id(greeting.id.toString())
+            .data(greeting.toView(), MediaType.APPLICATION_JSON)
         try {
             emitter.send(event)
         } catch (e: IOException) {
