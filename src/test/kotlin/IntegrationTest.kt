@@ -133,4 +133,17 @@ class IntegrationTest {
         assertThat(latest.name).isEqualTo("Ana")
         assertThat(latest.locale).isEqualTo("es")
     }
+
+    @Test
+    fun `should list a stored greeting at api greetings`() {
+        restTemplate.exchange(
+            "http://localhost:$port/api/hello?name=Ana", HttpMethod.GET, withLanguage("es-ES"), String::class.java
+        )
+
+        val response = restTemplate.getForEntity("http://localhost:$port/api/greetings", String::class.java)
+
+        assertThat(response.statusCode).isEqualTo(HttpStatus.OK)
+        assertThat(response.headers.contentType).isEqualTo(MediaType.APPLICATION_JSON)
+        assertThat(response.body).startsWith("""[{"name":"Ana","locale":"es","timestamp":""")
+    }
 }

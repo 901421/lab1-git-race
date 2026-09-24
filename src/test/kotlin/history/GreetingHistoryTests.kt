@@ -9,6 +9,7 @@ import org.mockito.Mockito.mock
 import org.mockito.Mockito.verify
 import org.mockito.Mockito.`when`
 import org.springframework.dao.DataAccessResourceFailureException
+import java.time.Instant
 import java.util.Locale
 
 class GreetingHistoryTests {
@@ -35,5 +36,14 @@ class GreetingHistoryTests {
             .thenThrow(DataAccessResourceFailureException("database is down"))
 
         assertThatCode { history.record("Ana", Locale.ENGLISH) }.doesNotThrowAnyException()
+    }
+
+    @Test
+    fun `should return the latest greetings without internal fields`() {
+        val createdAt = Instant.parse("2026-09-24T10:00:00Z")
+        `when`(repository.findTop10ByOrderByCreatedAtDescIdDesc())
+            .thenReturn(listOf(Greeting("Ana", "es", createdAt, id = 7)))
+
+        assertThat(history.latest()).containsExactly(GreetingView("Ana", "es", createdAt))
     }
 }

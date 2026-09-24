@@ -22,4 +22,9 @@ class GreetingHistory(private val repository: GreetingRepository) {
             log.warn("Could not store the greeting in the history", e)
         }
     }
+
+    /** The 10 most recent greetings, newest first. A database error is not caught here. */
+    fun latest(): List<GreetingView> =
+        repository.findTop10ByOrderByCreatedAtDescIdDesc()
+            .map { GreetingView(it.name, it.locale, it.createdAt) }
 }
