@@ -38,6 +38,23 @@ After the three pieces were finished, I reviewed the whole increment against the
 - Normal input never causes an HTTP 500. This includes names with spaces or accents (for example "José María") and a malformed `?lang=`.
 - Every behaviour I added has at least one test.
 
+### Bonus: greeting history
+
+During the lab session on 18 September, the teacher accepted verbally a bonus with a history of greetings stored in a database.
+
+Goal: every greeting is stored in a database that survives a restart, and the history can be read as JSON and on the home page.
+
+I set these rules block by block, each one before the code of that block:
+- Only a name sent in the request is stored. A greeting without a name, or with the name from the cookie, is not stored, so reloading the page does not fill the history.
+- The page and the API store greetings in the same way.
+- The history must never break the greeting. If the database fails, the greeting is still shown.
+
+Success criteria:
+- After `/?name=Ana` or `/api/hello?name=Ana`, the greeting is in the database, also after a restart.
+- `GET /api/greetings` returns the 10 most recent greetings, newest first.
+- The home page lists the same greetings, and a name that contains HTML is shown as plain text.
+- The tests never use the database file.
+
 ## What I changed
 
 ### Behaviour, in short
@@ -85,6 +102,28 @@ After the three pieces were finished, I reviewed the whole increment against the
 - `HelloController.kt`: the default name of `/api/hello` comes from the new key `greeting.defaultName` ("World" / "Mundo"). The name is URL-encoded before it goes into the cookie.
 - Tests: one integration test without `Accept-Language`, and MVC tests for the default name in both languages, names with spaces and accents, a malformed `lang`, the `lang` cookie, and an unsupported language (`fr`). I also removed a test field that still read the old `app.message` property.
 
+### Bonus: greeting history
+
+| Request | Before | After |
+|---|---|---|
+| `GET /?name=Ana` or `GET /api/hello?name=Ana` | nothing stored | name, requested language and time stored |
+| `GET /` with only the `name` cookie, or with no name | nothing stored | still nothing stored |
+| `GET /api/greetings` | did not exist | JSON array with the 10 most recent greetings, newest first |
+| `GET /` | greeting only | greeting and a "Recent greetings" list |
+
+- `build.gradle.kts`, `libs.versions.toml`: Spring Data JPA, H2, the Kotlin JPA plugin and the JPA test starter. Tests use an in-memory database (`jdbc:h2:mem:testdb`), never the file.
+- `application.properties`: H2 in the file `./data/greetings`, `ddl-auto=update` and `open-in-view=false`. `.gitignore`: `data/`.
+- New package `history`:
+  - `Greeting`: the entity (name, locale, createdAt).
+  - `GreetingRepository`: a query for the 10 most recent greetings.
+  - `GreetingHistory`: stores and reads greetings. A database error when storing is logged and ignored.
+  - `GreetingView`: what the API returns.
+  - `GreetingHistoryController`: `GET /api/greetings`.
+- `HelloController.kt`: both controllers call `GreetingHistory.record()` for a non-blank name from the request. `welcome()` adds the history to the model, and shows a notice instead if it cannot be read.
+- `welcome.html`: the history section. Three new keys `history.*` in both message files.
+- Tests: `GreetingRepositoryTests`, `GreetingHistoryTests`, `GreetingHistoryControllerTests`, and new cases in `HelloControllerMVCTests` and `IntegrationTest`.
+- Documentation: KDoc on the new classes and on `welcome()` and `helloApi()`; a short note in `README.md`.
+
 ## Technical decisions
 
 Each point says what I chose, what I rejected and why.
@@ -116,6 +155,22 @@ Each point says what I chose, what I rejected and why.
 - **URL-encode the name in the cookie with `UriUtils.encode`.** My first plan was `URLEncoder` plus `URLDecoder`. I dropped it when a test showed that `@CookieValue` already decodes `%XX`, so decoding again by hand would decode twice.
 - **Translate the default name ("World" / "Mundo").** Before, Spanish showed "¡Hola, World!". An empty `?name=` still gets the default name, as in the starter.
 - **Ignore a malformed `?lang=`** (`isIgnoreInvalidLocale`) instead of letting it fail with a 500.
+
+### Bonus: greeting history
+
+- **H2 in a file, with Spring Data JPA.** The history must survive a restart, so an in-memory database was not enough. Hibernate creates the table from the entity (`ddl-auto=update`). I rejected `schema.sql`, which is more files for one table, and `create-drop`, which deletes the history on every start.
+- **Tests use an in-memory database**, set with one line in `build.gradle.kts`. A test `application.properties` would have hidden the main one completely.
+- **`Greeting` is a `class`, not a `data class`.** With JPA, the `equals` of a data class changes when the id goes from `null` to a value. The Kotlin JPA plugin creates the empty constructor that JPA needs.
+- **Store the name and the language, not the greeting text.** The text can be built again from `messages*.properties`.
+- **Store only a name sent in the request.** A name from the cookie is not stored, because every reload of the page would add the same entry again. An empty name is not stored either.
+- **Store the language the visitor asked for, without the region** (`es`, not `es-ES`). With `fr` the page answers in English, but I still store `fr`. Rebuilding the text with `fr` gives the same English text, and I keep the information that someone asked for French. Storing the language of the answer would need a second list of supported languages in the code.
+- **A small service, `GreetingHistory`**, instead of calling the repository from each controller. The controllers decide *when* to store; the service decides *how*.
+- **The history never breaks the greeting.** If storing fails, the error is logged and the greeting is shown. If reading fails on the page, the page answers 200 with a notice instead of the list. I rejected answering 404: the page exists, and 404 means that it does not. I also rejected a custom 404 page, because it is a different feature, UI only, and outside what the teacher accepted.
+- **`/api/greetings` returns an error if the database fails.** There the history is the whole resource, and an empty list would say that there are no greetings, which would be false.
+- **The API returns `name`, `locale` and `timestamp` in a JSON array**, with a small class (`GreetingView`) instead of the entity. The id is internal, and `timestamp` is the same name that `/api/hello` uses. The limit is fixed at 10; a `?limit=` parameter would need more validation and tests.
+- **The page is rendered by the server with Thymeleaf**, not by JavaScript calling `/api/greetings`. The server decides what the page shows, and MockMvc can test it.
+- **Times are shown in UTC, with the label "UTC".** The server does not know the visitor's time zone.
+- **Names are printed with `th:text`.** A name sent by one visitor is shown to everybody, so it must be escaped. A test checks that `<script>` is shown as text.
 
 ## How I verified
 
@@ -196,6 +251,48 @@ curl -s -b "name=Ana" "http://localhost:8080/" | grep "lead"
 | Cookie `lang` | set by `?lang=` | 30 days, `Path=/` |
 | Cookie `name` | set by a valid `?name=` on `/` | 30 days, `Path=/`, URL-encoded |
 | Maximum name length | `HelloController.MAX_NAME_LENGTH` | 50 |
+
+### Bonus: greeting history
+
+**Final state.** `./gradlew clean check`: BUILD SUCCESSFUL, 46 tests, 0 failures (26 before the bonus). I also ran them with an English JVM in the `Asia/Tokyo` time zone, to be sure that the times on the page are really UTC: same result.
+
+**What failed first.** The first run of `GreetingHistoryTests` failed with a `NullPointerException`. The repository was a Mockito mock, and an unstubbed mock returns `null` from `save()`. Spring Data 4 marks `save()` as never returning `null`, so Kotlin checked the value and failed. The real `save()` never returns `null`, so I fixed the test: the mock now returns the entity it receives.
+
+**Tests that must fail.** For each rule, I broke the code on purpose and checked that a test failed, then restored it:
+
+| Change on purpose | Test that failed |
+|---|---|
+| Query ordered oldest first | the 10 most recent, newest first |
+| No `try/catch` when storing | the greeting does not fail when the database is down |
+| `record()` called also for the cookie name | the cookie name and an empty name are not stored |
+| No `try/catch` when the page reads the history | the page still works when the history cannot be read |
+| `th:utext` instead of `th:text` for the name | HTML in a stored name is escaped |
+
+**Restart.** With the real server, `?name=Ana` (Spanish) and `?name=Luis&lang=fr` stored `Ana`/`es` and `Luis`/`fr`. After a restart, both were still there. A visit with only the `name` cookie and a call to `/api/hello` without a name added nothing.
+
+#### How to run and test the bonus
+
+```bash
+rm -rf data          # start with an empty history, so the output below matches
+./gradlew bootRun
+```
+
+Then, from another terminal (timestamps shortened):
+
+```bash
+curl -s -H "Accept-Language: es-ES" "http://localhost:8080/?name=Ana" | grep "<strong>Ana"
+# <strong>Ana</strong> ·
+
+curl -s "http://localhost:8080/api/hello?name=Luis&lang=fr"
+# {"message":"Hello, Luis!","timestamp":"..."}
+
+curl -s -b "name=Ana" "http://localhost:8080/" > /dev/null   # cookie only: not stored
+
+curl -s "http://localhost:8080/api/greetings"
+# [{"name":"Luis","locale":"fr","timestamp":"..."},{"name":"Ana","locale":"es","timestamp":"..."}]
+```
+
+Stop the server, start it again with `./gradlew bootRun`, and call `/api/greetings` again: the answer is the same. The database file is `./data/greetings.mv.db`.
 
 ## AI disclosure
 
