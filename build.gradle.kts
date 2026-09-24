@@ -4,6 +4,7 @@ plugins {
     alias(libs.plugins.kotlin.jvm)
     alias(libs.plugins.kotlin.spring)
     alias(libs.plugins.spring.boot)
+    alias(libs.plugins.kotlin.jpa)
 }
 
 group = "es.unizar.webeng"
@@ -46,6 +47,7 @@ dependencies {
 
     testImplementation(libs.spring.boot.starter.test)
     testImplementation(libs.spring.boot.starter.webmvc.test)
+    testImplementation(libs.spring.boot.starter.data.jpa.test)
     testImplementation(libs.spring.boot.restclient)
     testImplementation(libs.spring.boot.resttestclient)
 }
