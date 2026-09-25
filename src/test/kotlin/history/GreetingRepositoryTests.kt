@@ -32,6 +32,17 @@ class GreetingRepositoryTests {
     }
 
     @Test
+    fun `should read back exactly the time it was created with`() {
+        val saved = entityManager.persistAndFlush(Greeting("Ana", "es"))
+        entityManager.clear()
+
+        val found = repository.findById(saved.id!!).orElseThrow()
+
+        // The live stream sends the time from memory; it must match what is stored
+        assertThat(found.createdAt).isEqualTo(saved.createdAt)
+    }
+
+    @Test
     fun `should return the 10 most recent greetings, newest first`() {
         (1..12).forEach { i ->
             entityManager.persist(Greeting("Name$i", "en", base.plusSeconds(i.toLong())))
@@ -42,5 +53,16 @@ class GreetingRepositoryTests {
 
         assertThat(latest).hasSize(10)
         assertThat(latest.map { it.name }).containsExactlyElementsOf((12 downTo 3).map { "Name$it" })
+    }
+
+    @Test
+    fun `should return the 10 most recent greetings after an id`() {
+        val stored = (1..12).map { i -> entityManager.persist(Greeting("Name$i", "en", base.plusSeconds(i.toLong()))) }
+        entityManager.flush()
+
+        val missed = repository.findTop10ByIdGreaterThanOrderByIdDesc(stored.first().id!!)
+
+        // 11 greetings came after the first one; the oldest of them (Name2) is left out
+        assertThat(missed.map { it.name }).containsExactlyElementsOf((12 downTo 3).map { "Name$it" })
     }
 }

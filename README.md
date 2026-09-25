@@ -60,6 +60,20 @@ curl "http://localhost:8080/api/greetings"
 # [{"name":"Ana","locale":"en","timestamp":"..."},{"name":"Ana","locale":"es","timestamp":"..."}]
 ```
 
+**Bonus: live updates (SSE).** The home page keeps its history list up to
+date without a reload. Each stored greeting is pushed to every open page by
+`GET /api/greetings/stream` (Server-Sent Events). With `?after=<id>`, the
+greetings stored after that id are sent first (at most 10).
+
+```bash
+curl -N "http://localhost:8080/api/greetings/stream?after=0"
+# In a second terminal: curl "http://localhost:8080/api/hello?name=Eva"
+# After the commands above, the stream shows ids 1 and 2 (Ana) and then Eva live:
+# event:greeting
+# id:3
+# data:{"name":"Eva","locale":"en","timestamp":"..."}
+```
+
 ## License
 
 MIT — see `LICENSE`.

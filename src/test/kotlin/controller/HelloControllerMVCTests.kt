@@ -246,7 +246,7 @@ class HelloControllerMVCTests {
     @Test
     fun `should show the greeting history on the page`() {
         `when`(greetingHistory.latest()).thenReturn(
-            listOf(GreetingView("Ana", "es", Instant.parse("2026-09-24T10:00:00Z")))
+            listOf(GreetingView("Ana", "es", Instant.parse("2026-09-24T10:00:00Z"), id = 1))
         )
 
         mockMvc.perform(get("/").locale(Locale.ENGLISH))
@@ -284,12 +284,52 @@ class HelloControllerMVCTests {
     @Test
     fun `should escape HTML in a stored name`() {
         `when`(greetingHistory.latest()).thenReturn(
-            listOf(GreetingView("<script>alert(1)</script>", "en", Instant.parse("2026-09-24T10:00:00Z")))
+            listOf(GreetingView("<script>alert(1)</script>", "en", Instant.parse("2026-09-24T10:00:00Z"), id = 1))
         )
 
         mockMvc.perform(get("/").locale(Locale.ENGLISH))
             .andExpect(status().isOk)
             .andExpect(content().string(containsString("&lt;script&gt;alert(1)&lt;/script&gt;")))
             .andExpect(content().string(not(containsString("<script>alert(1)"))))
+    }
+
+    @Test
+    fun `should give the page the ids where its live stream starts`() {
+        `when`(greetingHistory.latest()).thenReturn(
+            listOf(
+                GreetingView("Luis", "fr", Instant.parse("2026-09-24T10:00:05Z"), id = 7),
+                GreetingView("Ana", "es", Instant.parse("2026-09-24T10:00:00Z"), id = 6)
+            )
+        )
+
+        mockMvc.perform(get("/").locale(Locale.ENGLISH))
+            .andExpect(status().isOk)
+            .andExpect(model().attribute("lastGreetingId", equalTo(7L)))
+            .andExpect(content().string(containsString("data-last-id=\"7\"")))
+            .andExpect(content().string(containsString("data-id=\"7\"")))
+            .andExpect(content().string(containsString("data-id=\"6\"")))
+    }
+
+    @Test
+    fun `should start the live stream from 0 when the history is empty`() {
+        mockMvc.perform(get("/").locale(Locale.ENGLISH))
+            .andExpect(status().isOk)
+            .andExpect(content().string(containsString("data-last-id=\"0\"")))
+    }
+
+    @Test
+    fun `should not start the live stream when the history cannot be read`() {
+        `when`(greetingHistory.latest()).thenThrow(DataAccessResourceFailureException("database is down"))
+
+        mockMvc.perform(get("/").locale(Locale.ENGLISH))
+            .andExpect(status().isOk)
+            .andExpect(content().string(not(containsString("data-last-id"))))
+    }
+
+    @Test
+    fun `should load the live history script`() {
+        mockMvc.perform(get("/").locale(Locale.ENGLISH))
+            .andExpect(status().isOk)
+            .andExpect(content().string(containsString("/js/greeting-stream.js")))
     }
 }

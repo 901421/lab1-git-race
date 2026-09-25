@@ -6,6 +6,7 @@ import jakarta.persistence.Entity
 import jakarta.persistence.GeneratedValue
 import jakarta.persistence.Id
 import java.time.Instant
+import java.time.temporal.ChronoUnit
 
 /**
  * One greeting shown to a visitor, stored so the history survives a restart.
@@ -20,8 +21,9 @@ class Greeting(
     /** Language the visitor asked for, e.g. `en`, `es` or `fr` (without region). */
     @Column(nullable = false, length = 35)
     val locale: String,
+    /** When it was stored, kept to microseconds: finer values would be rounded by the database. */
     @Column(nullable = false)
-    val createdAt: Instant = Instant.now(),
+    val createdAt: Instant = Instant.now().truncatedTo(ChronoUnit.MICROS),
     @Id @GeneratedValue
     val id: Long? = null
 )

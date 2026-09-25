@@ -1,6 +1,7 @@
 package es.unizar.webeng.hello
 
 import es.unizar.webeng.hello.history.GreetingRepository
+import es.unizar.webeng.hello.history.GreetingStream
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
@@ -14,6 +15,16 @@ import org.springframework.http.HttpHeaders
 import org.springframework.http.HttpMethod
 import org.springframework.http.HttpStatus
 import org.springframework.http.MediaType
+import java.net.URI
+import java.net.http.HttpClient
+import java.net.http.HttpRequest
+import java.net.http.HttpResponse
+import java.time.Duration
+import java.util.concurrent.Callable
+import java.util.concurrent.CompletableFuture
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 
 @SpringBootTest(webEnvironment = WebEnvironment.RANDOM_PORT)
 @AutoConfigureTestRestTemplate
@@ -26,6 +37,9 @@ class IntegrationTest {
 
     @Autowired
     private lateinit var greetingRepository: GreetingRepository
+
+    @Autowired
+    private lateinit var greetingStream: GreetingStream
 
     @Test
     fun `should return home page with modern title and client-side HTTP debug`() {
@@ -154,5 +168,67 @@ class IntegrationTest {
         assertThat(response.statusCode).isEqualTo(HttpStatus.OK)
         assertThat(response.body).contains("Recent greetings")
         assertThat(response.body).contains("<strong>Ana</strong>")
+    }
+
+    @Test
+    fun `should push a new greeting to an open stream`() {
+        val before = greetingStream.connections()
+        // sendAsync: Spring sends the headers together with the first event,
+        // so a blocking send() would wait for a greeting that is never asked for
+        val response = HttpClient.newHttpClient().sendAsync(
+            HttpRequest.newBuilder(URI("http://localhost:$port/api/greetings/stream")).build(),
+            HttpResponse.BodyHandlers.ofLines()
+        )
+        // Wait until the server keeps the connection, or the greeting would be missed
+        val deadline = System.nanoTime() + Duration.ofSeconds(5).toNanos()
+        while (greetingStream.connections() == before) {
+            check(System.nanoTime() < deadline) { "The stream was not opened" }
+            Thread.sleep(10)
+        }
+
+        restTemplate.getForEntity("http://localhost:$port/api/hello?name=Eva", String::class.java)
+
+        val lines = response.get(5, TimeUnit.SECONDS).body()
+        // Read in the background: the stream never ends on its own
+        val event = CompletableFuture.supplyAsync {
+            lines.filter { it.startsWith("data:") }.findFirst().orElseThrow()
+        }
+        assertThat(event.get(5, TimeUnit.SECONDS)).contains("\"name\":\"Eva\"")
+        lines.close()
+    }
+
+    @Test
+    fun `should serve the live history script`() {
+        val response = restTemplate.getForEntity("http://localhost:$port/js/greeting-stream.js", String::class.java)
+
+        assertThat(response.statusCode).isEqualTo(HttpStatus.OK)
+        assertThat(response.body).contains("EventSource")
+    }
+
+    // More requests at the same time than connections in the pool (10):
+    // each request must get a connection, store its greeting and give it back
+    @Test
+    fun `should store every greeting when many requests arrive at the same time`() {
+        val prefix = "Pool-${System.nanoTime()}-"
+        val requests = 20
+        val start = CountDownLatch(1)
+        val executor = Executors.newFixedThreadPool(requests)
+        try {
+            val statuses = (1..requests).map { i ->
+                executor.submit(Callable {
+                    start.await()
+                    restTemplate.getForEntity(
+                        "http://localhost:$port/api/hello?name=$prefix$i", String::class.java
+                    ).statusCode.value()
+                })
+            }
+            start.countDown()
+            assertThat(statuses.map { it.get(10, TimeUnit.SECONDS) }).containsOnly(200)
+        } finally {
+            executor.shutdownNow()
+        }
+
+        val stored = greetingRepository.findAll().map { it.name }.filter { it.startsWith(prefix) }
+        assertThat(stored).hasSize(requests).doesNotHaveDuplicates()
     }
 }
