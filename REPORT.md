@@ -55,6 +55,26 @@ Success criteria:
 - The home page lists the same greetings, and a name that contains HTML is shown as plain text.
 - The tests never use the database file.
 
+### Bonus: live updates (SSE)
+
+After the greeting history was finished, the teacher asked for a second extra: show the stored greetings live on the home page.
+
+Goal: when a greeting is stored, every open home page adds it to the "Recent greetings" list without a reload.
+
+I set the first rules before writing any code, and the rest in the block where they were needed:
+- A greeting is sent live only after it is stored. The live view never shows a greeting that the database does not have.
+- A page that connects late, or reconnects, first gets the greetings it missed (at most 10), and never gets the same greeting twice.
+- Closed pages must not leave open connections on the server.
+- Each live greeting has the same JSON as in `/api/greetings`, without the id.
+- Names are still shown as text, never as HTML.
+
+Success criteria:
+- With two tabs open on `/`, a greeting sent from one tab, or with `curl`, appears at the top of the list in the other tab.
+- `curl -N "/api/greetings/stream?after=0"` first sends the stored greetings, and then each new one when it is stored.
+- A client that reconnects with `Last-Event-ID` gets only the greetings after that id.
+- A connection that fails or times out is removed.
+- If the database cannot be read, the stream fails like `/api/greetings`.
+
 ## What I changed
 
 ### Behaviour, in short
@@ -124,6 +144,27 @@ Success criteria:
 - Tests: `GreetingRepositoryTests`, `GreetingHistoryTests`, `GreetingHistoryControllerTests`, and new cases in `HelloControllerMVCTests` and `IntegrationTest`.
 - Documentation: KDoc on the new classes and on `welcome()` and `helloApi()`; a short note in `README.md`.
 
+### Bonus: live updates (SSE)
+
+| Request | Before | After |
+|---|---|---|
+| `GET /api/greetings/stream` | did not exist | Server-Sent Events stream: one `greeting` event per stored greeting, with the database id as event id and the same JSON as `/api/greetings` |
+| same, with `?after=<id>` or the `Last-Event-ID` header | did not exist | first the greetings stored after that id (at most 10, oldest first), then the new ones |
+| `GET /?name=Ana` or `GET /api/hello?name=Ana` | greeting stored | greeting stored, then sent to every open stream |
+| `GET /` | list rendered by the server | same list; a script opens the stream and adds new greetings at the top, without a reload |
+| `GET /api/greetings` | JSON array without id | unchanged |
+
+- New `GreetingStream`: keeps the open connections and sends each greeting to all of them. A connection is removed when it completes, times out (30 minutes), fails, or a send to it fails.
+- `GreetingHistoryController`: `GET /api/greetings/stream`. It registers the connection before it reads the missed greetings, so a greeting stored in between is not lost.
+- `GreetingRepository`: a query for the 10 most recent greetings after an id. `GreetingHistory`: `since(id)` for the missed greetings, and `record()` publishes a greeting only after `save()` worked.
+- `Greeting`: the time is cut to microseconds when the greeting is created (see *How I verified*).
+- `GreetingView`: now also has the id, hidden from the JSON. `Greeting.toView()` builds it in one place.
+- `HelloController.kt`: `welcome()` adds `lastGreetingId` to the model, the newest id on the page (0 if the list is empty). It is missing if the history cannot be read, and then the page has no live updates.
+- `welcome.html`: the list is always rendered, with `data-last-id`, and every item has a `data-id`. It loads the new script.
+- New `static/js/greeting-stream.js`: opens the stream with `EventSource` from `lastGreetingId`, skips ids already on the page, writes names with `textContent`, and keeps at most 10 items.
+- Tests: new `GreetingStreamTests`, and new cases in `GreetingRepositoryTests`, `GreetingHistoryTests`, `GreetingHistoryControllerTests`, `HelloControllerMVCTests` and `IntegrationTest`.
+- Documentation: KDoc on the new code, and a short note with a `curl -N` example in `README.md`.
+
 ## Technical decisions
 
 Each point says what I chose, what I rejected and why.
@@ -172,6 +213,21 @@ Each point says what I chose, what I rejected and why.
 - **Times are shown in UTC, with the label "UTC".** The server does not know the visitor's time zone.
 - **Names are printed with `th:text`.** A name sent by one visitor is shown to everybody, so it must be escaped. A test checks that `<script>` is shown as text.
 
+### Bonus: live updates (SSE)
+
+- **Server-Sent Events, with Spring's `SseEmitter`.** This is what the teacher asked for, and it fits: data only goes from the server to the page, over plain HTTP, and the browser reconnects by itself.
+- **A separate URL, `GET /api/greetings/stream`.** It is easy to test with `curl -N`, and `/api/greetings` does not change. I rejected one URL that answers JSON or a stream depending on the `Accept` header.
+- **Publish only after `save()` worked.** The live view never shows a greeting that the database does not have. If storing fails, nothing is sent, as in the greeting history.
+- **The database id is the event id.** The page connects with `?after=<last id shown>`, and when the browser reconnects it sends `Last-Event-ID`, which wins over `after`. The server registers the connection first and then sends what was missed, so a greeting stored in between is not lost. It can arrive twice, and the page drops it by its id. The JSON in `data:` still has no id.
+- **At most 10 missed greetings, the most recent ones.** It is the same limit as `/api/greetings`, and `?after=0` does not send the whole database. The query reads newest first and the list is then reversed. Reading oldest first would lose the newest greetings when more than 10 were missed. I rejected sending all missed greetings.
+- **Connections in a `CopyOnWriteArrayList`**, removed when they complete, time out, fail, or a send fails. Each greeting reads the list, and it changes only when a page opens or closes. The list can be read while another thread removes a connection. Closed tabs do not pile up.
+- **A timeout of 30 minutes.** A client that disappears without closing the connection does not keep it forever; a real browser reconnects with `Last-Event-ID`. I rejected no timeout.
+- **If the database cannot be read for the missed greetings, the request fails (500)** and the connection is removed, like `/api/greetings`. I rejected going on without the missed greetings, because the page would have a gap and not know it. I also rejected closing the stream with an error after opening it, because that is harder to test.
+- **The time is cut to microseconds when a greeting is created.** H2 stores microseconds, so without this the stream and `/api/greetings` gave different times for the same greeting. I rejected reading the greeting again after `save()` (one more query), and only documenting the difference.
+- **The page gets the newest id from the same list it shows.** `GreetingView` has the id, hidden from the JSON with `@JsonIgnore`, and `welcome()` takes the highest one. I rejected a separate query for the last id: a greeting stored between the two queries would be missing from the page. I also rejected a second view class only for the page.
+- **The script only adds greetings that arrive later.** The first list is still rendered by the server. The script writes names with `textContent`, never `innerHTML`, for the same reason as `th:text`. I did not add JavaScript tests, because they need a different test setup; I checked the script in the browser instead (see *How I verified*).
+- **A new branch, `feature/greeting-stream`**, separate from the greeting history, which was already merged.
+
 ## How I verified
 
 ### Final state
@@ -180,13 +236,13 @@ Each point says what I chose, what I rejected and why.
 ./gradlew clean check
 ```
 
-BUILD SUCCESSFUL, 46 tests, 0 failures: 26 for the increment and 20 for the bonus (see *Bonus: greeting history* below). My machine runs with a Spanish locale, so I also ran the tests with an English JVM, to be sure they do not depend on the machine:
+BUILD SUCCESSFUL, 66 tests, 0 failures: 26 for the increment, 20 for the greeting history and 20 for the live updates (see the bonus sections below). My machine runs with a Spanish locale, so I also ran the tests with an English JVM, to be sure they do not depend on the machine:
 
 ```bash
 LANG=en_US.UTF-8 JAVA_TOOL_OPTIONS="-Duser.language=en -Duser.country=US" ./gradlew check --rerun-tasks
 ```
 
-Same result: 46 tests, 0 failures.
+Same result: 66 tests, 0 failures.
 
 ### What failed first, and what I fixed
 
@@ -254,7 +310,7 @@ curl -s -b "name=Ana" "http://localhost:8080/" | grep "lead"
 
 ### Bonus: greeting history
 
-**Final state.** `./gradlew clean check`: BUILD SUCCESSFUL, 46 tests, 0 failures (26 before the bonus). I also ran them with an English JVM in the `Asia/Tokyo` time zone, to be sure that the times on the page are really UTC: same result.
+**At the end of this bonus**, before the live updates, `./gradlew clean check` gave BUILD SUCCESSFUL, 46 tests, 0 failures (26 before the bonus). I also ran them with an English JVM in the `Asia/Tokyo` time zone, to be sure that the times on the page are really UTC: same result.
 
 **What failed first.** The first run of `GreetingHistoryTests` failed with a `NullPointerException`. The repository was a Mockito mock, and an unstubbed mock returns `null` from `save()`. Spring Data 4 marks `save()` as never returning `null`, so Kotlin checked the value and failed. The real `save()` never returns `null`, so I fixed the test: the mock now returns the entity it receives.
 
@@ -293,6 +349,75 @@ curl -s "http://localhost:8080/api/greetings"
 ```
 
 Stop the server, start it again with `./gradlew bootRun`, and call `/api/greetings` again: the answer is the same. The database file is `./data/greetings.mv.db`.
+
+### Bonus: live updates (SSE)
+
+**Final state.** `./gradlew clean check`: BUILD SUCCESSFUL, 66 tests, 0 failures (46 before the live updates).
+
+**What failed first.**
+- The end-to-end test in `IntegrationTest` opened the stream with `HttpClient.send()` and timed out. `send()` waits for the response headers, and Spring sends the headers of a stream together with the first event, not when the connection opens. I changed only the test: it opens the stream with `sendAsync()`, waits until the server has registered the connection, and then stores a greeting. It passed three runs in a row. I did not change the endpoint to send an empty first event.
+- With the real server, the same greeting had two different times: `…821914673Z` in the stream and `…821915Z` in `/api/greetings`. The stream sent the time from Java (nanoseconds), and H2 stores microseconds, rounded. Since then the time is cut to microseconds when the greeting is created, and a test checks that the database gives back exactly the same time.
+
+**Tests that must fail.**
+
+| Change on purpose | Test that failed |
+|---|---|
+| No `remove` when a send fails | should forget a connection when sending to it fails |
+| Query ordered oldest first | should return the 10 most recent greetings after an id |
+| No `reversed()` after the query | should return the missed greetings oldest first |
+| No `remove` in `forget()` | should fail and forget the connection when the database is down |
+| No `remove` in `onCompletion` | should forget the connection when the browser closes it |
+| Publish also when `save()` fails | should not publish when the greeting could not be stored |
+| No `publish()` | should publish the greeting once it is stored, should push a new greeting to an open stream |
+| No `truncatedTo` | should read back exactly the time it was created with |
+| No `@JsonIgnore` on the id | should return the history as a JSON array, newest first |
+| No `?: 0L` for an empty history | should start the live stream from 0 when the history is empty |
+| `data-last-id` also when the history cannot be read | should not start the live stream when the history cannot be read |
+
+**Not covered by automatic tests.** The `onTimeout` and `onError` callbacks. The real 500 when the database is down: MockMvc throws the exception again instead of returning the response, so the test checks the exception and that the connection is removed. The script in the page: there is no JavaScript test setup, so I ran `node --check` and tested it in the browser.
+
+**In the browser.** With an empty database, I opened `/` in two tabs. Each name sent from the first tab appeared at the top of the list in the second tab, without a reload. A name with HTML, `<b>Eva</b>`, was shown as text. After more than 10 names, the second tab still showed 10 items and no name twice. After a reload, the second tab showed the same list.
+
+#### How to run and test the live updates
+
+```bash
+rm -rf data
+./gradlew bootRun
+```
+
+From a second terminal, keep a stream open:
+
+```bash
+curl -N "http://localhost:8080/api/greetings/stream"
+```
+
+From a third terminal:
+
+```bash
+curl -s "http://localhost:8080/api/hello?name=Ana" > /dev/null
+curl -s "http://localhost:8080/api/hello?name=Eva" > /dev/null
+```
+
+The stream shows both greetings when they are stored:
+
+```
+event:greeting
+id:1
+data:{"name":"Ana","locale":"en","timestamp":"..."}
+
+event:greeting
+id:2
+data:{"name":"Eva","locale":"en","timestamp":"..."}
+```
+
+A client that reconnects after id 1 gets only what it missed:
+
+```bash
+curl -N -H "Last-Event-ID: 1" "http://localhost:8080/api/greetings/stream?after=0"
+# event:greeting / id:2 / data:{"name":"Eva",...}
+```
+
+In the browser, open `http://localhost:8080/` in two tabs and send a name from one of them: it appears at the top of the list in the other tab.
 
 ## AI disclosure
 
