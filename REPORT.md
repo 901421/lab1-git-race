@@ -450,7 +450,16 @@ In the browser, open `http://localhost:8080/` in two tabs and send a name from o
 
 ## AI disclosure
 
-**Method.** I used Claude Code as an assistant in every step, under fixed rules that I wrote in a local `CLAUDE.md` file (not part of the submission). For each piece I first wrote the goal and the success criteria (see *What I specified*). The assistant then described the problem, proposed two or three solutions with their trade-offs, and after I chose one, proposed the code block by block. No block was written until I approved it. The assistant ran `./gradlew check` and the `curl` commands in the terminal of my machine, and I read their output before approving each step. Prompts were in Spanish; I quote them literally, with a translation.
+**Method.** I used Claude Code as an assistant during the whole lab. I wrote the working rules in a local `CLAUDE.md` file (not part of the submission). `/practica` and `/memoria-sin-ia`, named in the table below, are my own commands: generic prompts that I wrote and use for all my lab assignments. `/practica` sets the working rules (follow the lab guide, go step by step, give options with a recommendation, wait for my ok). `/memoria-sin-ia` gives style rules for report text: plain, direct sentences, without filler or the stock phrases of generated text.
+
+Every change followed the same loop:
+1. I described what I wanted to change and the success criteria (see *What I specified*). The assistant stated the problem back as it understood it, so that I could correct it.
+2. I asked it for possible solutions. It answered with two or three options, the trade-offs of each one and a recommendation.
+3. I compared the options and chose one. Sometimes I asked for more analysis first, or proposed my own idea and asked the assistant to analyse it.
+4. The assistant proposed the change in small steps, one file or one block at a time. Before doing anything, it told me what it had understood and what it was going to do, and waited for my ok. I approved each step or corrected it. From 23 September this rule also covered reading files and running commands.
+5. After each step, the assistant ran `./gradlew check` and the `curl` commands on my machine, and I read the output before approving the commit.
+
+The tables below show, for each phase, what I asked, what I decided, and what failed on the way. Prompts were in Spanish. I quote them with the spelling corrected, followed by an English translation.
 
 Summary of the uses:
 
@@ -460,45 +469,47 @@ Summary of the uses:
 | Piece 2: validation | Claude Code (Sonnet 5) | Alternatives for validation and code proposed block by block |
 | Piece 3: name cookie | Claude Code (Sonnet 5) | Alternatives for the cookie; how to handle the broken unit tests |
 | Documentation | Claude Code (Sonnet 5) | KDoc drafts and the `README.md` note |
-| Review fixes | Claude Code (Opus 5.5), with a local lab-workflow skill (`/practica`) | Check the increment against the guide, test edge cases, find bugs, propose tests and fixes |
-| Report | Claude Code (Opus 5.5), with a local writing-style skill (`/memoria-sin-ia`) | Draft sections 1 to 4 of this report from the facts in the repository, in plain English |
+| Review fixes | Claude Code (Opus 5.5), with my own `/practica` command | Check the increment against the guide, test edge cases, find bugs, propose tests and fixes |
+| Report | Claude Code (Opus 5.5), with my own `/memoria-sin-ia` command | Draft sections 1 to 4 of this report from the facts in the repository, in plain English |
 | Bonus: greeting history | Claude Code (Opus 5.5), with `/practica` and `/memoria-sin-ia` | For each block, options with trade-offs and a recommendation; code and tests after my approval; checks run in my terminal; draft of the bonus sections of this report |
+| Bonus: live updates (SSE) | Claude Code (Opus 5.5), with `/practica` and `/memoria-sin-ia` | For each block, options with trade-offs and a recommendation; code, tests and the page script after my approval; checks run in my terminal; draft of the SSE sections of this report |
+| Bonus: connection pool | Claude Code (Opus 5.5), with `/practica` and `/memoria-sin-ia` | Check that HikariCP was already in use, options for the teacher's recommendation, the pool settings, a concurrency test and the report text |
 
 ### Piece 1: Locale-aware greeting
 
 | Field | Entry |
 |---|---|
-| Representative prompts | "propusieras el problema primero, propusieras posibles soluciones y elijo una... y me propones bloques de código a modificar para cada fichero" (state the problem first, propose possible solutions and I choose one, then propose the code blocks to change in each file); then a "sí" for each block |
+| Representative prompts | I described what I wanted: the greeting in English and Spanish, chosen from the browser language, with a way to change it and remember it. I asked the assistant to work in this way: "Quiero que primero plantees el problema, propongas posibles soluciones, yo elija una y después me propongas los bloques de código que hay que cambiar en cada fichero" (first state the problem, propose possible solutions, I choose one, and then propose the code blocks to change in each file). Then a "sí" (yes) for each block |
 | Affected files/sections | `WebConfig.kt`, `HelloController.kt`, `messages*.properties`, `application.properties`, the three test classes |
 | Validation steps | `./gradlew check` and `curl` against the running app. Running the code showed two bugs (fixed default locale, `fallback-to-system-locale`) that I fixed before the commit |
 | Citations | None |
-| Human-reviewed | I chose the cookie-based resolver over the session and the manual options, decided to localize `/api/hello` too, and approved each file |
+| Human-reviewed | I chose Spring's `CookieLocaleResolver`, which keeps the language for 30 days. I rejected `SessionLocaleResolver`, which forgets it when the browser closes, and reading `Accept-Language` by hand. I also decided to localize `/api/hello`, which was not required. I approved each file |
 
 ### Piece 2: Name validation
 
 | Field | Entry |
 |---|---|
-| Representative prompts | "elijo B, esa regla vale" (I choose B, that rule is fine); then a "sí, aplícalo" (yes, apply it) for each block |
+| Representative prompts | I described the problem: the `name` parameter accepted any string of any length, and `spring-boot-starter-validation` was in the project but not used. I asked for ways to limit the length and to answer with a clear error. The assistant proposed three options. I answered: "Elijo la B" (I choose B) [B: `@Size` on the `name` parameter, with `@Validated` on the controller]. Then "Sí, aplícalo" (yes, apply it) for each block |
 | Affected files/sections | `HelloController.kt`, `ValidationExceptionHandler.kt`, `messages*.properties`, `welcome.html`, `HelloControllerMVCTests.kt` |
 | Validation steps | `./gradlew clean check` (17 tests at that point) and `curl` with 50 and 51 characters, on the page and on the API |
 | Citations | None |
-| Human-reviewed | I chose `@Size` on the parameter over a DTO or a manual check, and approved resolving the error text with `MessageSource` instead of Bean Validation's own message |
+| Human-reviewed | I chose `@Size` on the parameter and rejected the other two options: a DTO with `@Valid`, which is too much for one field, and a manual `if`, which does not use Bean Validation. I also approved taking the error text from `MessageSource` instead of Bean Validation's own message, so that the error follows the visitor's language |
 
 ### Piece 3: Remember the last valid name
 
 | Field | Entry |
 |---|---|
-| Representative prompts | "sí, elijo B, solo la página" (yes, I choose B, only the page); "opción 2 sí es la correcta" (option 2 is the right one), about the broken unit tests |
+| Representative prompts | I described the problem: the language was remembered between visits, but the name was not, and I asked how to keep the last valid name. I answered: "Sí, elijo la B, solo la página" (yes, I choose B, only the page) [B: the cookie is used only by the page `/`, not by `/api/hello`]. When the new signature of `welcome()` broke two unit tests, the assistant proposed ways to handle them, and I answered: "La opción 2 sí es la correcta" (option 2 is the right one) [option 2: remove the two tests, because the MVC tests already covered the same cases] |
 | Affected files/sections | `HelloController.kt`, `HelloControllerMVCTests.kt`, `HelloControllerUnitTests.kt` |
 | Validation steps | `./gradlew clean check` (18 tests) and `curl` with and without the `name` cookie |
 | Citations | None |
-| Human-reviewed | I chose the controller option over an interceptor, limited the cookie to the page, and chose to remove the two broken unit tests |
+| Human-reviewed | I chose to read and write the cookie in the controller, not with an interceptor like the one for the language. I limited the cookie to the page, so that an API call always gives the same answer to the same request. For the broken tests, I rejected rewriting them with a mock response (`MockHttpServletResponse`), because I did not want two tests for the same thing |
 
 ### Documentation
 
 | Field | Entry |
 |---|---|
-| Representative prompts | Not recorded |
+| Representative prompts | Not recorded. The drafts were the KDoc of the changed classes and the short note in `README.md` |
 | Affected files/sections | KDoc in `HelloController.kt` and `ValidationExceptionHandler.kt`; the `My increment` section of `README.md` |
 | Validation steps | `./gradlew check`; I read the KDoc against the code |
 | Citations | None |
@@ -508,28 +519,48 @@ Summary of the uses:
 
 | Field | Entry |
 |---|---|
-| Representative prompts | "Esto quiero que lo analices a fondo tendria que ser Hello World, Hola Mundo" (analyse this in depth, it should be Hello World, Hola Mundo); "ok a los tres, empieza por el fallo 1" (ok to the three, start with bug 1) |
+| Representative prompts | The assistant checked the increment against the guide and tested it with `curl` and unusual input. When it showed that `/api/hello` in Spanish answered "¡Hola, World!", I wrote: "Quiero que analices esto a fondo: tendría que ser Hello World y Hola Mundo" (analyse this in depth; it should be Hello World and Hola Mundo). After the list of bugs: "Ok a los tres, empieza por el fallo 1" (ok to the three, start with bug 1) |
 | Affected files/sections | `WebConfig.kt`, `HelloController.kt`, `application.properties`, `messages*.properties`, `IntegrationTest.kt`, `HelloControllerMVCTests.kt` (commits `8ad4a0a` to `ec08b34`) |
 | Validation steps | For each fix, a test written first and seen failing (see *How I verified*); then `./gradlew check` with a Spanish and an English JVM (26 tests) and `curl` against the real server |
 | Citations | None. Spring APIs were checked in the Spring 7 jars (`javap`) and by running the app |
-| Human-reviewed | I chose English when there is no `Accept-Language` over leaving it as it was, asked for "World" / "Mundo", and approved each fix and each commit. I rejected the assistant's first plan for the cookie (`URLEncoder` + `URLDecoder`) after a test showed that it would decode twice |
+| Human-reviewed | Without an `Accept-Language` header, I chose English on any machine, and rejected leaving it as it was and only documenting it. I asked for "World" / "Mundo". I approved each fix and each commit. The assistant's first plan for the cookie (`URLEncoder` + `URLDecoder`) was dropped when a test showed that it would decode the name twice |
 
 ### Report
 
 | Field | Entry |
 |---|---|
-| Representative prompts | "ok, adelante con What I changed" (ok, go on with What I changed); "ok, verifica ese dato y monta el REPORT" (ok, check that fact and put the report together) |
-| Affected files/sections | `REPORT.md`, sections *What I specified*, *What I changed*, *Technical decisions*, *How I verified* and this disclosure |
+| Representative prompts | "Ok, adelante con What I changed" (ok, go on with What I changed); "Ok, verifica ese dato y monta el REPORT" (ok, check that fact and put the report together). On 25 September, to rewrite this disclosure: "Quiero explicar de forma general la forma de trabajo: te planteo el problema con detalle, te pido soluciones, las analizas y me dices cuáles hay, yo decido cuál elegir, y vamos poco a poco, con mi ok o con mis correcciones" (I want to explain the way of working in general: I describe the problem in detail, I ask you for solutions, you analyse them and tell me the options, I decide which one to choose, and we go step by step, with my ok or my corrections) |
+| Affected files/sections | `REPORT.md`, sections *What I specified*, *What I changed*, *Technical decisions*, *How I verified* and this disclosure (written on 23 September, rewritten on 25 September) |
 | Validation steps | Every command in the report was run as written. Two facts about Piece 1 were checked again by running the app |
 | Citations | None |
-| Human-reviewed | I approved each section. Two sentences in the drafts were removed because they were not true |
+| Human-reviewed | I approved each section. Two sentences in the drafts were removed because they were not true. I asked to remove a separate provenance note, and on 25 September I asked to rewrite this disclosure so that every choice says what was chosen and what was rejected |
 
 ### Bonus: greeting history
 
 | Field | Entry |
 |---|---|
-| Representative prompts | "desarolla este punto y vuelve a proponermelo" (develop this point and propose it again), about which language to store; "que quieres decir con eso de los 10 most recent ones, que la bd se sobreescribe?" (what do you mean by "the 10 most recent ones", is the database overwritten?); "seria un error 404 puede ser, analiza esto" (maybe it should be a 404 error, analyse this); "antes de proceder explicame exactamente que devuelve con un ejemplo calro secuencia real" (before going on, explain exactly what it returns with a clear example, a real sequence) |
+| Representative prompts | "Desarrolla este punto y vuelve a proponérmelo" (develop this point and propose it again) [which language to store: I chose the language the visitor asked for, without the region; I rejected the full tag (`es-ES`) and the language of the answer]; "¿Qué quieres decir con «the 10 most recent ones»? ¿Que la base de datos se sobrescribe?" (what do you mean by "the 10 most recent ones", is the database overwritten?) [no: every greeting is stored, and only the reading is limited to 10; I asked to reword the commit message]; "Podría ser un error 404, analiza esto" (maybe it should be a 404 error, analyse this) [my own idea, a 404 with a custom page; I dropped it after the analysis: `/` exists, and a custom 404 page is UI only and outside what the teacher accepted]; "Antes de seguir, explícame exactamente qué devuelve, con un ejemplo claro de una secuencia real" (before going on, explain exactly what it returns, with a clear example of a real sequence) |
 | Affected files/sections | Package `history` (5 classes), `HelloController.kt`, `welcome.html`, `messages*.properties`, `application.properties`, `build.gradle.kts`, `libs.versions.toml`, `.gitignore`, the test classes, `README.md` and the bonus sections of this report (commits `2118a76` to the one that adds this table, on the branch `feature/greeting-history`) |
 | Validation steps | `./gradlew clean check` after each block (26, 28, 36, 40 and 46 tests), with a Spanish and an English JVM; each rule broken on purpose to see its test fail; `curl` against the real server, including a restart; the commands in *How to run and test the bonus* run as written |
 | Citations | None. Spring and Thymeleaf APIs were checked in the jars of the versions used (for example the package of `@DataJpaTest` in Boot 4.1 and `#temporals.format`) |
-| Human-reviewed | I chose every design decision from the options, 15 in total (what to store, the API shape, how the page shows the history, where the documentation goes). I asked for more analysis twice: which language to store, and my own idea of answering 404 with a custom page, which I dropped after the analysis. I asked to reword a commit message that could be misread, and approved each block and each commit before it was made |
+| Human-reviewed | I chose every design decision from the options, 15 in total. The main ones: H2 in a file with JPA (rejected: `schema.sql`, `create-drop`); only a name sent in the request is stored (not the cookie name); `/api/greetings` returns a plain array without the id (rejected: exposing the entity, `?limit=`, a wrapper object); an error, not `[]`, if the database fails; the list rendered by the server (rejected: JavaScript). The assistant wrote the code and the tests after I approved each block |
+
+### Bonus: live updates (SSE)
+
+| Field | Entry |
+|---|---|
+| Representative prompts | I described the teacher's request: show the stored greetings live on the home page with SSE. When the end-to-end test timed out: "A: sendAsync en el test" (A: sendAsync in the test) [change only the test; rejected: making the endpoint send an empty first event]. When the live time and the stored time did not match: "A: truncar a microsegundos" (A: cut to microseconds) [rejected: reading the greeting again after `save()`, or only documenting it]. For the newest id on the page: "El id en GreetingView con @JsonIgnore" (the id in GreetingView, with @JsonIgnore) [rejected: a separate query for the last id, and a second view class]. Then "Ok, adelante" (ok, go ahead) and "Ok, commit" for each block |
+| Affected files/sections | `GreetingStream.kt`, `GreetingHistoryController.kt`, `GreetingRepository.kt`, `GreetingHistory.kt`, `Greeting.kt`, `GreetingView.kt`, `HelloController.kt`, `welcome.html`, `static/js/greeting-stream.js`, their test classes, `README.md` and the live-update sections of this report (commits `5f8162f` to `8149d86`, on the branch `feature/greeting-stream`) |
+| Validation steps | `./gradlew check` after each block (49, 57, 60, 61 and 66 tests), with a Spanish and an English JVM; each rule broken on purpose to see its test fail (see *How I verified*); `curl -N` against the real server, including `Last-Event-ID`; `node --check` for the script; the two-tab test in the browser, done by me |
+| Citations | None. Two Spring and H2 details (the headers of a stream are sent with the first event; H2 stores microseconds) were found by running the code |
+| Human-reviewed | I chose each of the 10 design decisions from the options: publish only after `save()`, the database id as event id with `Last-Event-ID`, a separate URL, at most 10 missed greetings, a 30-minute timeout, the error on a database failure, and the four above. The assistant first assumed that the stream sent its headers when it opened; the test showed that this was wrong, and it stopped and asked. The assistant wrote the code, the tests and the page script after I approved each block |
+
+### Bonus: connection pool
+
+| Field | Entry |
+|---|---|
+| Representative prompts | "El profesor me recomienda usar HikariCP para las conexiones concurrentes" (the teacher recommends HikariCP for concurrent connections). After the options: "Verificar primero" (check first), then "Explícito + test" (explicit + test) [set the pool in `application.properties` and add a concurrency test; rejected: only explaining it in the report, and only the configuration without a test] |
+| Affected files/sections | `application.properties`, `IntegrationTest.kt` and the connection-pool sections of this report (commits `b8c2ece` and `cf25f4b`) |
+| Validation steps | The dependency tree and the log (`HikariPool-1`, then `greetings-pool`); property names and default values checked in the Spring Boot 4.1 and HikariCP 7.0.2 jars; `./gradlew check`, 67 tests with a Spanish and an English JVM; a pool of 1 with a 250 ms timeout, which did not make the test fail (see *How I verified*) |
+| Citations | None |
+| Human-reviewed | I kept the default size (10) and did not change the timeouts without a load test. I put the change on the same branch as the live updates instead of a new one. Before the experiment, the assistant said that a pool of 1 would probably not make the test fail, and I decided to report the result as it was |
