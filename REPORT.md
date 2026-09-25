@@ -75,6 +75,16 @@ Success criteria:
 - A connection that fails or times out is removed.
 - If the database cannot be read, the stream fails like `/api/greetings`.
 
+### Bonus: connection pool
+
+After the live updates, the teacher recommended HikariCP for concurrent connections to the database.
+
+Goal: many requests at the same time can store and read greetings, and the pool is visible in the configuration.
+
+Success criteria:
+- The app uses HikariCP, and the pool is set in `application.properties`.
+- 20 requests that arrive at the same time store their 20 greetings, with no errors and no duplicates.
+
 ## What I changed
 
 ### Behaviour, in short
@@ -165,6 +175,11 @@ Success criteria:
 - Tests: new `GreetingStreamTests`, and new cases in `GreetingRepositoryTests`, `GreetingHistoryTests`, `GreetingHistoryControllerTests`, `HelloControllerMVCTests` and `IntegrationTest`.
 - Documentation: KDoc on the new code, and a short note with a `curl -N` example in `README.md`.
 
+### Bonus: connection pool
+
+- `application.properties`: `spring.datasource.hikari.pool-name=greetings-pool` and `maximum-pool-size=10`, with a comment.
+- `IntegrationTest`: a test that sends 20 requests to `/api/hello` at the same time and checks that the 20 names are stored.
+
 ## Technical decisions
 
 Each point says what I chose, what I rejected and why.
@@ -228,6 +243,12 @@ Each point says what I chose, what I rejected and why.
 - **The script only adds greetings that arrive later.** The first list is still rendered by the server. The script writes names with `textContent`, never `innerHTML`, for the same reason as `th:text`. I did not add JavaScript tests, because they need a different test setup; I checked the script in the browser instead (see *How I verified*).
 - **A new branch, `feature/greeting-stream`**, separate from the greeting history, which was already merged.
 
+### Bonus: connection pool
+
+- **Keep HikariCP and set it explicitly.** Spring Boot already uses HikariCP with Spring Data JPA (`spring-boot-starter-data-jpa` → `spring-boot-starter-jdbc` → `HikariCP 7.0.2`), so no new dependency was needed. I set the pool in `application.properties` so that it is visible, and gave it a name so that it is easy to find in the log.
+- **A pool of 10, the default value.** I did not change the size or the timeouts, because I had no load test to justify other numbers. With `open-in-view=false`, a request uses a connection only while its query runs, and an open live stream does not keep one.
+- **A test with more requests than connections (20 against 10).** The requests start together with a `CountDownLatch`. The test checks the database, not only the HTTP status, because `/api/hello` answers 200 even when storing fails. I rejected only explaining it in the report, and only changing the configuration without a test.
+
 ## How I verified
 
 ### Final state
@@ -236,13 +257,13 @@ Each point says what I chose, what I rejected and why.
 ./gradlew clean check
 ```
 
-BUILD SUCCESSFUL, 66 tests, 0 failures: 26 for the increment, 20 for the greeting history and 20 for the live updates (see the bonus sections below). My machine runs with a Spanish locale, so I also ran the tests with an English JVM, to be sure they do not depend on the machine:
+BUILD SUCCESSFUL, 67 tests, 0 failures: 26 for the increment, 20 for the greeting history, 20 for the live updates and 1 for the connection pool (see the bonus sections below). My machine runs with a Spanish locale, so I also ran the tests with an English JVM, to be sure they do not depend on the machine:
 
 ```bash
 LANG=en_US.UTF-8 JAVA_TOOL_OPTIONS="-Duser.language=en -Duser.country=US" ./gradlew check --rerun-tasks
 ```
 
-Same result: 66 tests, 0 failures.
+Same result: 67 tests, 0 failures.
 
 ### What failed first, and what I fixed
 
@@ -352,7 +373,7 @@ Stop the server, start it again with `./gradlew bootRun`, and call `/api/greetin
 
 ### Bonus: live updates (SSE)
 
-**Final state.** `./gradlew clean check`: BUILD SUCCESSFUL, 66 tests, 0 failures (46 before the live updates).
+**At the end of this bonus**, before the connection pool, `./gradlew clean check` gave BUILD SUCCESSFUL, 66 tests, 0 failures (46 before the live updates).
 
 **What failed first.**
 - The end-to-end test in `IntegrationTest` opened the stream with `HttpClient.send()` and timed out. `send()` waits for the response headers, and Spring sends the headers of a stream together with the first event, not when the connection opens. I changed only the test: it opens the stream with `sendAsync()`, waits until the server has registered the connection, and then stores a greeting. It passed three runs in a row. I did not change the endpoint to send an empty first event.
@@ -418,6 +439,14 @@ curl -N -H "Last-Event-ID: 1" "http://localhost:8080/api/greetings/stream?after=
 ```
 
 In the browser, open `http://localhost:8080/` in two tabs and send a name from one of them: it appears at the top of the list in the other tab.
+
+### Bonus: connection pool
+
+**Final state.** `./gradlew clean check`: BUILD SUCCESSFUL, 67 tests, 0 failures (66 before).
+
+**The pool.** Before the change, the log of `./gradlew bootRun` showed `HikariPool-1 - Start completed.` After it, the log shows `greetings-pool - Start completed.` The tests use the same pool, with the in-memory database.
+
+**A change that did not make the test fail.** I set the pool to 1 connection and the connection timeout to 250 ms, the lowest value HikariCP accepts, and ran the test again. It still passed, with no timeouts: each query is so short that the 20 requests only wait in a queue. So the test shows that 20 requests at the same time store all their greetings, with no errors and no duplicates. It does not show that 10 connections are needed; that would need a load test with slow queries.
 
 ## AI disclosure
 
