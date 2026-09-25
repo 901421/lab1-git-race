@@ -20,7 +20,10 @@ import java.net.http.HttpClient
 import java.net.http.HttpRequest
 import java.net.http.HttpResponse
 import java.time.Duration
+import java.util.concurrent.Callable
 import java.util.concurrent.CompletableFuture
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 
 @SpringBootTest(webEnvironment = WebEnvironment.RANDOM_PORT)
@@ -200,5 +203,32 @@ class IntegrationTest {
 
         assertThat(response.statusCode).isEqualTo(HttpStatus.OK)
         assertThat(response.body).contains("EventSource")
+    }
+
+    // More requests at the same time than connections in the pool (10):
+    // each request must get a connection, store its greeting and give it back
+    @Test
+    fun `should store every greeting when many requests arrive at the same time`() {
+        val prefix = "Pool-${System.nanoTime()}-"
+        val requests = 20
+        val start = CountDownLatch(1)
+        val executor = Executors.newFixedThreadPool(requests)
+        try {
+            val statuses = (1..requests).map { i ->
+                executor.submit(Callable {
+                    start.await()
+                    restTemplate.getForEntity(
+                        "http://localhost:$port/api/hello?name=$prefix$i", String::class.java
+                    ).statusCode.value()
+                })
+            }
+            start.countDown()
+            assertThat(statuses.map { it.get(10, TimeUnit.SECONDS) }).containsOnly(200)
+        } finally {
+            executor.shutdownNow()
+        }
+
+        val stored = greetingRepository.findAll().map { it.name }.filter { it.startsWith(prefix) }
+        assertThat(stored).hasSize(requests).doesNotHaveDuplicates()
     }
 }
